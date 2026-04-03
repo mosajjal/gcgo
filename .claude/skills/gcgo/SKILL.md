@@ -159,6 +159,59 @@ gcgo container clusters get-credentials my-cluster --location us-central1
 # kubeconfig is now updated, use kubectl normally
 ```
 
+## Credential Security
+
+### Config and credential directory
+
+By default gcgo stores config at `~/.config/gcgo/properties.toml` and credentials at `~/.config/gcgo/credentials.json`. Set `GCGO_CONFIG_DIR` to redirect both to a different directory:
+
+```bash
+# CI: credentials mounted at a known path
+GCGO_CONFIG_DIR=/run/secrets/gcgo gcgo run services list --region us-central1
+```
+
+### External credential helpers
+
+Set `GCGO_CREDENTIALS_HELPER` to delegate credential storage to an external binary. gcgo calls it with a single verb:
+
+| Invocation | Direction | Purpose |
+|---|---|---|
+| `helper get` | helper → stdout (JSON) | Retrieve credentials |
+| `helper store` | stdin (JSON) → helper | Persist credentials |
+| `helper erase` | — | Remove credentials |
+
+The JSON format is ADC-compatible (`authorized_user` or `service_account`). Helper exits 0 on success; non-zero exit shows stderr to the user.
+
+```bash
+# age-encrypted credentials
+export GCGO_CREDENTIALS_HELPER="gcgo-age-helper"
+
+# OS keyring
+export GCGO_CREDENTIALS_HELPER="gcgo-keyring-helper"
+
+# 1Password
+export GCGO_CREDENTIALS_HELPER="gcgo-op-helper"
+
+# HashiCorp Vault
+export GCGO_CREDENTIALS_HELPER="gcgo-vault-helper"
+
+# With arguments
+export GCGO_CREDENTIALS_HELPER="my-helper --profile prod"
+```
+
+Example age helper (`~/.local/bin/gcgo-age-helper`):
+
+```bash
+#!/usr/bin/env bash
+KEY="$HOME/.ssh/id_ed25519"
+STORE="$HOME/.config/gcgo/credentials.age"
+case "$1" in
+  get)   age --decrypt -i "$KEY" "$STORE" ;;
+  store) age --encrypt -i "$KEY" -o "$STORE" ;;
+  erase) rm -f "$STORE" ;;
+esac
+```
+
 ## Service Account Impersonation
 
 Any command supports `--impersonate-service-account`:
