@@ -1,0 +1,613 @@
+# gcgo
+
+gcgo is a fast, single-binary CLI for Google Cloud Platform, written in Go. It replaces the `gcloud` CLI for common operations with lower startup latency and no Python dependency. The binary is statically linked and requires no runtime.
+
+## Installation
+
+```
+go install github.com/mosajjal/gcgo/cmd/gcgo@latest
+```
+
+Or build from source:
+
+```
+git clone https://github.com/mosajjal/gcgo
+cd gcgo
+make build
+./bin/gcgo
+```
+
+## Authentication
+
+gcgo delegates entirely to Application Default Credentials (ADC). Run `gcgo auth login` to authenticate interactively, or set `GOOGLE_APPLICATION_CREDENTIALS` to a service account key file. Service account impersonation is supported via `--impersonate-service-account` on any command.
+
+## Global Flags
+
+These flags work on every command:
+
+- `--project STRING` — GCP project ID. Falls back to the value set in config (`gcgo config set core/project`).
+- `--format STRING` — Output format. `table` (default) or `json`.
+- `--impersonate-service-account STRING` — Service account email to impersonate for the request.
+- `--quiet` — Suppress non-essential output (progress messages, hints).
+
+## Config
+
+gcgo stores config at `~/.config/gcgo/properties.toml`. Keys mirror gcloud's structure.
+
+```
+gcgo config set core/project my-project-id
+gcgo config set compute/region us-central1
+gcgo config set compute/zone us-central1-a
+gcgo config get core/project
+gcgo config list
+gcgo config unset core/project
+```
+
+## Commands by Service
+
+### auth — Authentication
+
+```
+gcgo auth login [--service-account-key PATH]
+gcgo auth list
+gcgo auth print-access-token [--scope SCOPE] [--impersonate-service-account EMAIL]
+gcgo auth print-identity-token [--audience URL] [--impersonate-service-account EMAIL] [--include-email]
+gcgo auth revoke
+```
+
+### projects — Project Management
+
+```
+gcgo projects list
+gcgo projects describe PROJECT_ID
+```
+
+### compute — Compute Engine
+
+Instances:
+```
+gcgo compute instances list [--zone ZONE]
+gcgo compute instances describe INSTANCE [--zone ZONE]
+gcgo compute instances create INSTANCE [--zone ZONE]
+gcgo compute instances delete INSTANCE [--zone ZONE]
+```
+
+SSH / SCP:
+```
+gcgo compute ssh INSTANCE [--zone ZONE]
+gcgo compute scp SRC DST [--zone ZONE]
+```
+
+Disks:
+```
+gcgo compute disks list [--zone ZONE]
+gcgo compute disks describe DISK [--zone ZONE]
+gcgo compute disks create DISK [--zone ZONE]
+gcgo compute disks delete DISK [--zone ZONE]
+```
+
+Firewall rules:
+```
+gcgo compute firewall-rules list
+gcgo compute firewall-rules describe RULE
+gcgo compute firewall-rules create RULE
+gcgo compute firewall-rules delete RULE
+```
+
+Networks and subnets:
+```
+gcgo compute networks list
+gcgo compute networks describe NETWORK
+gcgo compute subnets list [--region REGION]
+gcgo compute subnets describe SUBNET [--region REGION]
+```
+
+Other compute resources (list / describe / create / delete unless noted):
+- `addresses` — static IP addresses
+- `routers` — Cloud Routers
+- `routes`
+- `forwarding-rules` [--region]
+- `backend-services` [--global | --region]
+- `health-checks`
+- `url-maps`
+- `target-http-proxies`
+- `target-https-proxies`
+- `target-tcp-proxies`
+- `target-ssl-proxies`
+- `images`
+- `snapshots`
+- `instance-templates`
+- `instance-groups` [--zone]
+- `autoscalers` [--zone]
+- `vpn-tunnels` [--region]
+
+### storage — Cloud Storage
+
+```
+gcgo storage ls [gs://BUCKET[/PREFIX]]
+gcgo storage cp SRC DST
+gcgo storage mv SRC DST
+gcgo storage rm gs://BUCKET/OBJECT
+gcgo storage cat gs://BUCKET/OBJECT
+gcgo storage rsync SRC DST
+gcgo storage mb gs://BUCKET [--location LOCATION] [--storage-class CLASS]
+gcgo storage rb gs://BUCKET
+gcgo storage sign-url gs://BUCKET/OBJECT
+```
+
+### container — GKE
+
+```
+gcgo container clusters list [--location LOCATION]
+gcgo container clusters describe CLUSTER [--location LOCATION]
+gcgo container clusters create CLUSTER [--location LOCATION]
+gcgo container clusters delete CLUSTER [--location LOCATION]
+gcgo container clusters update CLUSTER [--location LOCATION]
+gcgo container clusters upgrade CLUSTER [--location LOCATION]
+gcgo container clusters get-credentials CLUSTER [--location LOCATION]
+gcgo container clusters operations list [--location LOCATION]
+gcgo container node-pools list --cluster CLUSTER [--location LOCATION]
+gcgo container node-pools describe NODE_POOL --cluster CLUSTER [--location LOCATION]
+```
+
+### run — Cloud Run
+
+```
+gcgo run services list [--region REGION]
+gcgo run services describe SERVICE [--region REGION]
+gcgo run services delete SERVICE [--region REGION]
+gcgo run services update SERVICE [--region REGION]
+gcgo run services update-traffic SERVICE [--region REGION]
+gcgo run services rollback SERVICE [--region REGION]
+gcgo run revisions list [--region REGION]
+gcgo run revisions describe REVISION [--region REGION]
+gcgo run jobs list [--region REGION]
+gcgo run jobs describe JOB [--region REGION]
+gcgo run deploy [--region REGION]
+```
+
+### functions — Cloud Functions
+
+```
+gcgo functions list [--region REGION]
+gcgo functions describe FUNCTION [--region REGION]
+gcgo functions deploy FUNCTION [--region REGION] [--runtime RUNTIME] [--entry-point EP] [--source PATH] [--trigger-http | --trigger-topic TOPIC] [--memory SIZE] [--timeout DURATION]
+gcgo functions delete FUNCTION [--region REGION]
+gcgo functions call FUNCTION [--region REGION] [--data JSON]
+```
+
+### iam — Identity and Access Management
+
+```
+gcgo iam service-accounts list
+gcgo iam service-accounts create ACCOUNT_ID [--display-name NAME]
+gcgo iam service-accounts delete EMAIL
+gcgo iam service-accounts keys list --iam-account EMAIL
+gcgo iam service-accounts keys create --iam-account EMAIL
+gcgo iam service-accounts keys delete KEY_ID --iam-account EMAIL
+gcgo iam roles list
+gcgo iam roles describe ROLE
+```
+
+### logging — Cloud Logging
+
+```
+gcgo logging read [FILTER] [--limit N]
+gcgo logging tail [FILTER]
+gcgo logging sinks list
+gcgo logging sinks describe SINK
+gcgo logging sinks create SINK
+gcgo logging sinks delete SINK
+```
+
+### pubsub — Cloud Pub/Sub
+
+Topics:
+```
+gcgo pubsub topics list
+gcgo pubsub topics describe TOPIC
+gcgo pubsub topics create TOPIC
+gcgo pubsub topics delete TOPIC
+gcgo pubsub topics publish TOPIC --message MESSAGE [--attribute KEY=VALUE]
+```
+
+Subscriptions:
+```
+gcgo pubsub subscriptions list
+gcgo pubsub subscriptions describe SUBSCRIPTION
+gcgo pubsub subscriptions create SUBSCRIPTION --topic TOPIC [--ack-deadline SECONDS]
+gcgo pubsub subscriptions delete SUBSCRIPTION
+gcgo pubsub subscriptions pull SUBSCRIPTION [--max-messages N]
+```
+
+Schemas:
+```
+gcgo pubsub schemas list
+gcgo pubsub schemas describe SCHEMA
+gcgo pubsub schemas create SCHEMA [--type TYPE] [--definition DEF]
+gcgo pubsub schemas delete SCHEMA
+```
+
+### sql — Cloud SQL
+
+```
+gcgo sql instances list
+gcgo sql instances describe INSTANCE
+gcgo sql instances create INSTANCE
+gcgo sql instances delete INSTANCE
+gcgo sql databases list --instance INSTANCE
+gcgo sql databases describe DATABASE --instance INSTANCE
+gcgo sql databases create DATABASE --instance INSTANCE
+gcgo sql databases delete DATABASE --instance INSTANCE
+gcgo sql users list --instance INSTANCE
+gcgo sql users create USER --instance INSTANCE
+gcgo sql users delete USER --instance INSTANCE
+gcgo sql backups list --instance INSTANCE
+gcgo sql backups describe BACKUP
+gcgo sql backups create --instance INSTANCE
+gcgo sql backups delete BACKUP
+gcgo sql operations list --instance INSTANCE
+gcgo sql operations describe OPERATION
+```
+
+### spanner — Cloud Spanner
+
+```
+gcgo spanner instances list
+gcgo spanner instances describe INSTANCE
+gcgo spanner instances create INSTANCE
+gcgo spanner instances delete INSTANCE
+gcgo spanner databases list --instance INSTANCE
+gcgo spanner databases describe DATABASE --instance INSTANCE
+gcgo spanner databases create DATABASE --instance INSTANCE
+gcgo spanner databases delete DATABASE --instance INSTANCE
+gcgo spanner backups list --instance INSTANCE
+gcgo spanner backups describe BACKUP --instance INSTANCE
+```
+
+### firestore — Firestore
+
+```
+gcgo firestore list
+gcgo firestore describe DATABASE [--location LOCATION]
+gcgo firestore create DATABASE [--location LOCATION] [--type TYPE]
+gcgo firestore delete DATABASE [--etag ETAG]
+gcgo firestore export DATABASE --output-uri gs://BUCKET/PREFIX [--collection COL] [--namespace NS]
+gcgo firestore import DATABASE --input-uri gs://BUCKET/PREFIX [--collection COL] [--namespace NS]
+gcgo firestore operations list [--filter FILTER]
+gcgo firestore operations describe OPERATION_NAME
+gcgo firestore indexes list [--database DATABASE] [--collection-group GROUP]
+gcgo firestore indexes describe INDEX_NAME
+gcgo firestore indexes create [--database DATABASE] [--collection-group GROUP] [--index-json JSON]
+gcgo firestore indexes delete INDEX_NAME
+```
+
+### bigtable — Cloud Bigtable
+
+```
+gcgo bigtable instances list
+gcgo bigtable instances describe INSTANCE
+gcgo bigtable instances create INSTANCE [--display-name NAME] [--cluster CLUSTER] [--zone ZONE] [--serve-nodes N] [--type TYPE] [--storage-type TYPE]
+gcgo bigtable instances delete INSTANCE
+gcgo bigtable tables list --instance INSTANCE
+gcgo bigtable tables describe TABLE --instance INSTANCE
+gcgo bigtable tables create TABLE --instance INSTANCE
+gcgo bigtable tables delete TABLE --instance INSTANCE
+gcgo bigtable instances backups list --instance INSTANCE [--cluster CLUSTER]
+gcgo bigtable instances backups describe BACKUP
+gcgo bigtable instances backups create BACKUP --instance INSTANCE --cluster CLUSTER --source-table TABLE [--expire-time TIME]
+gcgo bigtable instances backups delete BACKUP
+gcgo bigtable operations list [--filter FILTER]
+gcgo bigtable operations describe OPERATION_NAME
+```
+
+### alloydb — AlloyDB
+
+```
+gcgo alloydb clusters list [--location LOCATION]
+gcgo alloydb clusters describe CLUSTER [--location LOCATION]
+gcgo alloydb clusters create CLUSTER [--location LOCATION] [--display-name NAME] [--network NET] [--username USER] [--password PASS]
+gcgo alloydb clusters delete CLUSTER [--location LOCATION]
+gcgo alloydb instances list --cluster CLUSTER [--location LOCATION]
+gcgo alloydb instances describe INSTANCE --cluster CLUSTER [--location LOCATION]
+gcgo alloydb instances create INSTANCE --cluster CLUSTER [--location LOCATION] [--instance-type TYPE] [--cpu-count N]
+gcgo alloydb instances delete INSTANCE --cluster CLUSTER [--location LOCATION]
+```
+
+### redis — Memorystore for Redis
+
+```
+gcgo redis instances list [--location LOCATION]
+gcgo redis instances describe INSTANCE [--location LOCATION]
+gcgo redis instances create INSTANCE [--location LOCATION] [--tier TIER] [--memory-size-gb N] [--authorized-network NET]
+gcgo redis instances delete INSTANCE [--location LOCATION]
+```
+
+### secrets — Secret Manager
+
+```
+gcgo secrets list
+gcgo secrets describe SECRET
+gcgo secrets create SECRET [--replication-policy POLICY] [--data DATA]
+gcgo secrets delete SECRET
+gcgo secrets versions list SECRET
+gcgo secrets versions access SECRET VERSION
+```
+
+### kms — Cloud KMS
+
+```
+gcgo kms key-rings list [--location LOCATION]
+gcgo kms key-rings describe KEY_RING [--location LOCATION]
+gcgo kms key-rings create KEY_RING [--location LOCATION]
+gcgo kms crypto-keys list KEY_RING [--location LOCATION]
+gcgo kms crypto-keys describe CRYPTO_KEY [--location LOCATION]
+gcgo kms crypto-keys create CRYPTO_KEY [--location LOCATION] [--purpose PURPOSE] [--rotation-period PERIOD]
+gcgo kms crypto-key-versions list KEY_RING CRYPTO_KEY [--location LOCATION]
+```
+
+### monitoring — Cloud Monitoring
+
+```
+gcgo monitoring dashboards list
+gcgo monitoring dashboards describe NAME
+gcgo monitoring dashboards create [--display-name NAME]
+gcgo monitoring dashboards delete NAME
+gcgo monitoring policies list
+gcgo monitoring policies describe NAME
+gcgo monitoring policies create [--display-name NAME]
+gcgo monitoring policies delete NAME
+gcgo monitoring channels list
+gcgo monitoring channels describe NAME
+gcgo monitoring channels create [--display-name NAME] [--type TYPE]
+gcgo monitoring channels delete NAME
+```
+
+### scheduler — Cloud Scheduler
+
+```
+gcgo scheduler jobs list [--location LOCATION]
+gcgo scheduler jobs describe JOB [--location LOCATION]
+gcgo scheduler jobs create JOB --schedule CRON --uri URI [--location LOCATION]
+gcgo scheduler jobs delete JOB [--location LOCATION]
+gcgo scheduler jobs pause JOB [--location LOCATION]
+gcgo scheduler jobs resume JOB [--location LOCATION]
+```
+
+### tasks — Cloud Tasks
+
+```
+gcgo tasks queues list [--location LOCATION]
+gcgo tasks queues describe QUEUE [--location LOCATION]
+gcgo tasks queues create QUEUE [--location LOCATION]
+gcgo tasks queues delete QUEUE [--location LOCATION]
+gcgo tasks tasks list QUEUE [--location LOCATION]
+gcgo tasks tasks create QUEUE [--location LOCATION]
+gcgo tasks tasks delete QUEUE TASK [--location LOCATION]
+```
+
+### builds — Cloud Build
+
+```
+gcgo builds list
+gcgo builds describe BUILD_ID
+gcgo builds cancel BUILD_ID
+gcgo builds triggers list
+gcgo builds triggers describe TRIGGER_ID
+gcgo builds triggers create [--name NAME] [--repo-name REPO] [--branch-name BRANCH] [--filename FILE]
+gcgo builds triggers delete TRIGGER_ID
+gcgo builds triggers run TRIGGER_ID
+```
+
+### artifacts — Artifact Registry
+
+```
+gcgo artifacts repositories list [--location LOCATION]
+gcgo artifacts repositories describe REPOSITORY [--location LOCATION]
+gcgo artifacts repositories create REPOSITORY [--location LOCATION] [--format FORMAT] [--description DESC]
+gcgo artifacts repositories delete REPOSITORY [--location LOCATION]
+gcgo artifacts packages list [--location LOCATION] [--repository REPO]
+gcgo artifacts packages delete PACKAGE [--location LOCATION] [--repository REPO]
+gcgo artifacts versions list [--location LOCATION] [--repository REPO] [--package PKG]
+gcgo artifacts versions delete VERSION [--location LOCATION] [--repository REPO] [--package PKG]
+```
+
+### deploy — Cloud Deploy
+
+```
+gcgo deploy delivery-pipelines list [--location LOCATION]
+gcgo deploy delivery-pipelines describe PIPELINE [--location LOCATION]
+gcgo deploy delivery-pipelines create PIPELINE [--location LOCATION] [--target TARGET]
+gcgo deploy delivery-pipelines delete PIPELINE [--location LOCATION]
+gcgo deploy releases list PIPELINE [--location LOCATION]
+gcgo deploy releases describe PIPELINE RELEASE [--location LOCATION]
+gcgo deploy releases create PIPELINE RELEASE [--location LOCATION] [--skaffold-config-uri URI]
+```
+
+### dataflow — Dataflow
+
+```
+gcgo dataflow jobs list [--filter FILTER]
+gcgo dataflow jobs describe JOB
+gcgo dataflow jobs messages JOB [--minimum-importance LEVEL] [--start-time TIME] [--end-time TIME]
+gcgo dataflow jobs metrics JOB [--start-time TIME]
+gcgo dataflow jobs cancel JOB
+gcgo dataflow jobs drain JOB
+gcgo dataflow snapshots list [--job JOB]
+gcgo dataflow snapshots describe SNAPSHOT
+gcgo dataflow snapshots create JOB [--ttl DURATION]
+gcgo dataflow snapshots delete SNAPSHOT
+gcgo dataflow flex-templates launch [--job-name NAME] [--container-spec-gcs-path PATH] [--param KEY=VALUE]
+gcgo dataflow templates get [--gcs-path PATH]
+gcgo dataflow templates launch [--gcs-path PATH] [--job-name NAME] [--parameter KEY=VALUE]
+```
+
+### dataproc — Dataproc
+
+```
+gcgo dataproc clusters list [--region REGION]
+gcgo dataproc clusters describe CLUSTER [--region REGION]
+gcgo dataproc clusters create CLUSTER [--region REGION] [--machine-type TYPE] [--num-workers N] [--image-version VERSION]
+gcgo dataproc clusters delete CLUSTER [--region REGION]
+gcgo dataproc clusters start CLUSTER [--region REGION]
+gcgo dataproc clusters stop CLUSTER [--region REGION]
+gcgo dataproc jobs list [--region REGION]
+gcgo dataproc jobs describe JOB_ID [--region REGION]
+gcgo dataproc jobs submit [--region REGION] [--cluster CLUSTER] [--class CLASS] [--jars JARS]
+gcgo dataproc jobs cancel JOB_ID [--region REGION]
+gcgo dataproc batches list [--region REGION]
+gcgo dataproc batches describe BATCH [--region REGION]
+gcgo dataproc batches create [--region REGION] [--batch-id ID] [--class CLASS]
+gcgo dataproc batches delete BATCH [--region REGION]
+```
+
+### dataplex — Dataplex
+
+```
+gcgo dataplex lakes list [--location LOCATION]
+gcgo dataplex lakes describe LAKE [--location LOCATION]
+gcgo dataplex lakes create LAKE [--location LOCATION] [--display-name NAME]
+gcgo dataplex lakes delete LAKE [--location LOCATION]
+gcgo dataplex zones list --lake LAKE [--location LOCATION]
+gcgo dataplex zones describe ZONE --lake LAKE [--location LOCATION]
+gcgo dataplex zones create ZONE --lake LAKE [--location LOCATION] [--type TYPE]
+gcgo dataplex zones delete ZONE --lake LAKE [--location LOCATION]
+```
+
+### datacatalog — Data Catalog
+
+```
+gcgo datacatalog entry-groups list
+gcgo datacatalog entry-groups describe ENTRY_GROUP
+gcgo datacatalog entry-groups create ENTRY_GROUP [--display-name NAME] [--description DESC]
+gcgo datacatalog entry-groups delete ENTRY_GROUP
+gcgo datacatalog entries list --entry-group ENTRY_GROUP
+gcgo datacatalog entries describe ENTRY --entry-group ENTRY_GROUP
+```
+
+### composer — Cloud Composer
+
+```
+gcgo composer environments list [--location LOCATION]
+gcgo composer environments describe ENVIRONMENT [--location LOCATION]
+gcgo composer environments create ENVIRONMENT [--location LOCATION] [--node-count N] [--machine-type TYPE] [--image-version VERSION]
+gcgo composer environments delete ENVIRONMENT [--location LOCATION]
+gcgo composer environments update ENVIRONMENT [--location LOCATION] [--node-count N] [--label KEY=VALUE]
+```
+
+### workflows — Workflows
+
+```
+gcgo workflows list [--location LOCATION]
+gcgo workflows describe WORKFLOW [--location LOCATION]
+gcgo workflows deploy WORKFLOW --source-file FILE [--location LOCATION] [--service-account SA]
+gcgo workflows delete WORKFLOW [--location LOCATION]
+```
+
+### eventarc — Eventarc
+
+```
+gcgo eventarc triggers list [--location LOCATION]
+gcgo eventarc triggers describe TRIGGER [--location LOCATION]
+gcgo eventarc triggers create TRIGGER [--location LOCATION] [--event-type TYPE] [--filter KEY=VALUE] [--workflow WORKFLOW | --cloud-run-service SERVICE]
+gcgo eventarc triggers delete TRIGGER [--location LOCATION]
+```
+
+### scc — Security Command Center
+
+```
+gcgo scc findings list SOURCE [--filter FILTER]
+gcgo scc findings set-state FINDING --state ACTIVE|INACTIVE
+gcgo scc findings set-mute FINDING --mute MUTED|UNMUTED
+gcgo scc sources ORG_ID
+gcgo scc notifications list ORG_ID
+gcgo scc notifications describe NAME
+gcgo scc notifications create ORG_ID CONFIG_ID --topic TOPIC [--filter FILTER]
+gcgo scc notifications delete NAME
+```
+
+### asset — Cloud Asset Inventory
+
+```
+gcgo asset search-all-resources [--scope SCOPE] [--query QUERY] [--asset-types TYPES]
+gcgo asset search-all-iam-policies [--scope SCOPE] [--query QUERY]
+gcgo asset export [--scope SCOPE] [--output-path gs://BUCKET/PREFIX] [--asset-types TYPES] [--content-type TYPE]
+gcgo asset analyze-iam-policy [--scope SCOPE] [--identity IDENTITY] [--permission PERM] [--resource-name RES]
+gcgo asset feeds list [--scope SCOPE]
+gcgo asset feeds describe FEED_NAME
+gcgo asset feeds create FEED_ID [--scope SCOPE] [--topic TOPIC] [--asset-types TYPES]
+gcgo asset feeds delete FEED_NAME
+```
+
+### billing — Cloud Billing
+
+```
+gcgo billing accounts list
+gcgo billing accounts describe ACCOUNT_ID
+gcgo billing projects list ACCOUNT_ID
+gcgo billing projects describe PROJECT_ID
+gcgo billing projects link PROJECT_ID --billing-account ACCOUNT_ID
+gcgo billing projects unlink PROJECT_ID
+gcgo billing budgets list BILLING_ACCOUNT_ID
+gcgo billing budgets describe BUDGET_NAME
+gcgo billing budgets create BILLING_ACCOUNT_ID [--display-name NAME] [--amount AMOUNT] [--currency-code CODE]
+gcgo billing budgets delete BUDGET_NAME
+```
+
+### ai — Vertex AI
+
+```
+gcgo ai models list
+gcgo ai models describe MODEL
+gcgo ai endpoints list
+gcgo ai endpoints describe ENDPOINT
+gcgo ai custom-jobs list
+gcgo ai custom-jobs describe JOB
+gcgo ai datasets list
+gcgo ai datasets describe DATASET
+gcgo ai pipeline-jobs list
+gcgo ai pipeline-jobs describe JOB
+gcgo ai batch-prediction-jobs list
+gcgo ai batch-prediction-jobs describe JOB
+gcgo ai operations list [--filter FILTER]
+gcgo ai operations describe OPERATION_NAME
+```
+
+### organizations — Resource Manager
+
+```
+gcgo organizations list
+gcgo organizations describe ORG_ID
+gcgo organizations get-iam-policy ORG_ID
+```
+
+### folders — Resource Manager
+
+```
+gcgo folders list [--parent PARENT]
+gcgo folders describe FOLDER_ID
+gcgo folders create [--parent PARENT] [--display-name NAME]
+gcgo folders delete FOLDER_ID
+gcgo folders move FOLDER_ID --destination-parent PARENT
+```
+
+### services — Service Usage
+
+```
+gcgo services list
+gcgo services describe SERVICE
+gcgo services enable SERVICE
+gcgo services disable SERVICE
+```
+
+## Output
+
+All list and describe commands support `--format json` for machine-readable output. Default is a human-readable table to stdout. Errors go to stderr.
+
+## Differences from gcloud
+
+- No `alpha`/`beta`/`ga` command groups — commands are flat per service.
+- No `gcloud init` — configure with `gcgo config set`.
+- No components — single static binary, always up to date.
+- Auth is ADC-only — no device flow stored in gcloud's credential store (use `gcgo auth login` which writes ADC credentials).
+- Startup time is under 20ms vs ~500ms for gcloud.
