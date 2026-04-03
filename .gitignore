@@ -6,6 +6,7 @@ coverage.out
 .envrc
 .env
 .claude/
+!.claude/skills/
 .codex/
 .codex
 gcgo
