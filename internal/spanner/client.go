@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	spanner "cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
@@ -31,7 +32,7 @@ type Database struct {
 // QueryResult holds the output of an execute-sql call.
 type QueryResult struct {
 	Columns []string   `json:"columns"`
-	Rows    [][]string  `json:"rows"`
+	Rows    [][]string `json:"rows"`
 }
 
 // Client defines Spanner operations.
@@ -57,8 +58,9 @@ type CreateInstanceRequest struct {
 }
 
 type gcpClient struct {
-	instances *instance.InstanceAdminClient
-	databases *database.DatabaseAdminClient
+	instances  *instance.InstanceAdminClient
+	databases  *database.DatabaseAdminClient
+	clientOpts []option.ClientOption
 }
 
 // NewClient creates a Client backed by the real Spanner Admin APIs.
@@ -73,7 +75,7 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 		return nil, fmt.Errorf("create spanner database admin client: %w", err)
 	}
 
-	return &gcpClient{instances: ic, databases: dc}, nil
+	return &gcpClient{instances: ic, databases: dc, clientOpts: opts}, nil
 }
 
 func (c *gcpClient) ListInstances(ctx context.Context, project string) ([]*Instance, error) {
@@ -211,12 +213,43 @@ func (c *gcpClient) DeleteDatabase(ctx context.Context, project, inst, name stri
 	return nil
 }
 
-func (c *gcpClient) ExecuteSQL(_ context.Context, _, _, _, _ string) (*QueryResult, error) {
-	// Spanner admin client doesn't directly execute SQL queries.
-	// A full implementation would use the spanner data client.
-	// This is a placeholder that returns an error directing users
-	// to use the spanner data client for queries.
-	return nil, fmt.Errorf("execute-sql requires a spanner data client (not yet implemented)")
+func (c *gcpClient) ExecuteSQL(ctx context.Context, project, inst, db, sql string) (*QueryResult, error) {
+	dbPath := fmt.Sprintf("projects/%s/instances/%s/databases/%s", project, inst, db)
+
+	dataClient, err := spanner.NewClient(ctx, dbPath, c.clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("create spanner data client: %w", err)
+	}
+	defer dataClient.Close()
+
+	stmt := spanner.Statement{SQL: sql}
+	iter := dataClient.Single().Query(ctx, stmt)
+	defer iter.Stop()
+
+	var result QueryResult
+	for {
+		row, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("execute sql: %w", err)
+		}
+		if result.Columns == nil {
+			result.Columns = row.ColumnNames()
+		}
+		rowData := make([]string, row.Size())
+		for i := 0; i < row.Size(); i++ {
+			var v spanner.GenericColumnValue
+			if err := row.Column(i, &v); err != nil {
+				rowData[i] = ""
+				continue
+			}
+			rowData[i] = fmt.Sprintf("%v", v.Value.AsInterface())
+		}
+		result.Rows = append(result.Rows, rowData)
+	}
+	return &result, nil
 }
 
 func instanceFromProto(i *instancepb.Instance) *Instance {

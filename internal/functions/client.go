@@ -3,10 +3,13 @@ package functions
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mosajjal/gcgo/internal/auth"
 	cloudfunctions "google.golang.org/api/cloudfunctions/v2"
 	"google.golang.org/api/option"
 )
@@ -50,16 +53,17 @@ type Client interface {
 }
 
 type gcpClient struct {
-	svc *cloudfunctions.Service
+	svc   *cloudfunctions.Service
+	creds *auth.Credentials
 }
 
 // NewClient creates a Client backed by the real Cloud Functions API.
-func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error) {
+func NewClient(ctx context.Context, creds *auth.Credentials, opts ...option.ClientOption) (Client, error) {
 	svc, err := cloudfunctions.NewService(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create cloud functions client: %w", err)
 	}
-	return &gcpClient{svc: svc}, nil
+	return &gcpClient{svc: svc, creds: creds}, nil
 }
 
 func (c *gcpClient) List(ctx context.Context, project, region string) ([]*Function, error) {
@@ -140,9 +144,41 @@ func (c *gcpClient) Delete(ctx context.Context, project, region, name string) er
 	return nil
 }
 
-func (c *gcpClient) Call(_ context.Context, _, _, _ string, _ *CallRequest) (string, error) {
-	// Cloud Functions v2 does not have a direct "call" RPC.
-	return "", fmt.Errorf("call not implemented for v2 functions (invoke the function URL directly)")
+func (c *gcpClient) Call(ctx context.Context, project, region, name string, req *CallRequest) (string, error) {
+	fn, err := c.Get(ctx, project, region, name)
+	if err != nil {
+		return "", fmt.Errorf("get function for call: %w", err)
+	}
+	if fn.URL == "" {
+		return "", fmt.Errorf("function %s has no HTTP trigger URL", name)
+	}
+
+	token, err := c.creds.AccessToken(ctx, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("get auth token: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fn.URL, strings.NewReader(req.Data))
+	if err != nil {
+		return "", fmt.Errorf("build call request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("call function: %w", err)
+	}
+	defer resp.Body.Close()
+
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read call response: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("call function: HTTP %d: %s", resp.StatusCode, out)
+	}
+	return string(out), nil
 }
 
 func funcFromAPI(f *cloudfunctions.Function, region string) *Function {

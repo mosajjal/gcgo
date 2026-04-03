@@ -9,7 +9,6 @@ import (
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
 	"github.com/mosajjal/gcgo/internal/output"
-	"github.com/mosajjal/gcgo/internal/placeholder"
 	"github.com/spf13/cobra"
 )
 
@@ -25,24 +24,12 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		newRevisionsCommand(cfg, creds),
 		newJobsCommand(cfg, creds),
 		newDeployCommand(cfg, creds),
-		newDomainMappingsCommand(),
+		newDomainMappingsCommand(cfg, creds),
 	)
 
 	return cmd
 }
 
-func newDomainMappingsCommand() *cobra.Command {
-	const docsURL = "https://cloud.google.com/run/docs/mapping-custom-domains"
-	return placeholder.NewGroup(
-		"domain-mappings",
-		"Manage Cloud Run domain mappings",
-		docsURL,
-		placeholder.NewCommand("list", "List Cloud Run domain mappings", docsURL),
-		placeholder.NewCommand("describe", "Describe a Cloud Run domain mapping", docsURL),
-		placeholder.NewCommand("create", "Create a Cloud Run domain mapping", docsURL),
-		placeholder.NewCommand("delete", "Delete a Cloud Run domain mapping", docsURL),
-	)
-}
 
 func requireProject(cmd *cobra.Command, cfg *config.Config) (string, error) {
 	flagVal, _ := cmd.Flags().GetString("project")

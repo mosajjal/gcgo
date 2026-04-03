@@ -7,7 +7,6 @@ import (
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
 	"github.com/mosajjal/gcgo/internal/output"
-	"github.com/mosajjal/gcgo/internal/placeholder"
 	"github.com/spf13/cobra"
 )
 
@@ -147,22 +146,156 @@ func newInstanceGroupsCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 	}
 	cmd.AddCommand(
 		newManagedInstanceGroupsCommand(cfg, creds),
-		newUnmanagedInstanceGroupsCommand(),
+		newUnmanagedInstanceGroupsCommand(cfg, creds),
 	)
 	return cmd
 }
 
-func newUnmanagedInstanceGroupsCommand() *cobra.Command {
-	const docsURL = "https://cloud.google.com/compute/docs/instance-groups"
-	return placeholder.NewGroup(
-		"unmanaged",
-		"Manage unmanaged instance groups",
-		docsURL,
-		placeholder.NewCommand("list", "List unmanaged instance groups", docsURL),
-		placeholder.NewCommand("describe", "Describe an unmanaged instance group", docsURL),
-		placeholder.NewCommand("create", "Create an unmanaged instance group", docsURL),
-		placeholder.NewCommand("delete", "Delete an unmanaged instance group", docsURL),
+func newUnmanagedInstanceGroupsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unmanaged",
+		Short: "Manage unmanaged instance groups",
+	}
+	cmd.AddCommand(
+		newUnmanagedInstanceGroupsListCommand(cfg, creds),
+		newUnmanagedInstanceGroupsDescribeCommand(cfg, creds),
+		newUnmanagedInstanceGroupsCreateCommand(cfg, creds),
+		newUnmanagedInstanceGroupsDeleteCommand(cfg, creds),
 	)
+	return cmd
+}
+
+func newUnmanagedInstanceGroupsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List unmanaged instance groups",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			groups, err := client.ListUnmanagedInstanceGroups(ctx, project, zone)
+			if err != nil {
+				return err
+			}
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), groups)
+			}
+			headers := []string{"NAME", "ZONE", "SIZE", "NETWORK"}
+			rows := make([][]string, len(groups))
+			for i, g := range groups {
+				rows[i] = []string{g.Name, g.Zone, fmt.Sprintf("%d", g.Size), g.Network}
+			}
+			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
+}
+
+func newUnmanagedInstanceGroupsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "describe GROUP",
+		Short: "Describe an unmanaged instance group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			g, err := client.GetUnmanagedInstanceGroup(ctx, project, zone, args[0])
+			if err != nil {
+				return err
+			}
+			return output.PrintJSON(cmd.OutOrStdout(), g)
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
+}
+
+func newUnmanagedInstanceGroupsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var req CreateUnmanagedInstanceGroupRequest
+
+	cmd := &cobra.Command{
+		Use:   "create GROUP",
+		Short: "Create an unmanaged instance group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			req.Name = args[0]
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.CreateUnmanagedInstanceGroup(ctx, project, zone, &req); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Created unmanaged instance group %q in %s/%s.\n", req.Name, project, zone)
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringVar(&req.Network, "network", "", "VPC network")
+	cmd.Flags().StringVar(&req.Description, "description", "", "Group description")
+	return cmd
+}
+
+func newUnmanagedInstanceGroupsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete GROUP",
+		Short: "Delete an unmanaged instance group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.DeleteUnmanagedInstanceGroup(ctx, project, zone, args[0]); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted unmanaged instance group %q.\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
 }
 
 func newManagedInstanceGroupsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {

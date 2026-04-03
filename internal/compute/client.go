@@ -50,6 +50,35 @@ type Snapshot struct {
 	StorageBytes int64  `json:"storage_bytes"`
 }
 
+// Image holds compute image fields.
+type Image struct {
+	Name        string `json:"name"`
+	Family      string `json:"family,omitempty"`
+	Status      string `json:"status"`
+	DiskSizeGb  int64  `json:"disk_size_gb"`
+	Description string `json:"description,omitempty"`
+	SelfLink    string `json:"self_link,omitempty"`
+}
+
+// VPNTunnel holds VPN tunnel fields.
+type VPNTunnel struct {
+	Name        string `json:"name"`
+	Region      string `json:"region"`
+	Status      string `json:"status"`
+	PeerIP      string `json:"peer_ip,omitempty"`
+	IKEVersion  int32  `json:"ike_version,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// UnmanagedInstanceGroup holds unmanaged instance group fields.
+type UnmanagedInstanceGroup struct {
+	Name        string `json:"name"`
+	Zone        string `json:"zone"`
+	Size        int32  `json:"size"`
+	Network     string `json:"network,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // InstanceTemplate holds instance template fields.
 type InstanceTemplate struct {
 	Name           string `json:"name"`
@@ -120,6 +149,18 @@ type Client interface {
 	GetAutoscaler(ctx context.Context, project, zone, name string) (*Autoscaler, error)
 	CreateAutoscaler(ctx context.Context, project, zone string, req *CreateAutoscalerRequest) error
 	DeleteAutoscaler(ctx context.Context, project, zone, name string) error
+	ListImages(ctx context.Context, project string) ([]*Image, error)
+	GetImage(ctx context.Context, project, name string) (*Image, error)
+	CreateImage(ctx context.Context, project string, req *CreateImageRequest) error
+	DeleteImage(ctx context.Context, project, name string) error
+	ListVPNTunnels(ctx context.Context, project, region string) ([]*VPNTunnel, error)
+	GetVPNTunnel(ctx context.Context, project, region, name string) (*VPNTunnel, error)
+	CreateVPNTunnel(ctx context.Context, project, region string, req *CreateVPNTunnelRequest) error
+	DeleteVPNTunnel(ctx context.Context, project, region, name string) error
+	ListUnmanagedInstanceGroups(ctx context.Context, project, zone string) ([]*UnmanagedInstanceGroup, error)
+	GetUnmanagedInstanceGroup(ctx context.Context, project, zone, name string) (*UnmanagedInstanceGroup, error)
+	CreateUnmanagedInstanceGroup(ctx context.Context, project, zone string, req *CreateUnmanagedInstanceGroupRequest) error
+	DeleteUnmanagedInstanceGroup(ctx context.Context, project, zone, name string) error
 }
 
 // CreateInstanceRequest holds parameters for instance creation.
@@ -189,14 +230,42 @@ type CreateAutoscalerRequest struct {
 	Description    string
 }
 
+// CreateImageRequest holds parameters for image creation.
+type CreateImageRequest struct {
+	Name        string
+	SourceDisk  string
+	Family      string
+	Description string
+}
+
+// CreateVPNTunnelRequest holds parameters for VPN tunnel creation.
+type CreateVPNTunnelRequest struct {
+	Name              string
+	PeerIP            string
+	SharedSecret      string
+	VPNGateway        string
+	IKEVersion        int32
+	Description       string
+}
+
+// CreateUnmanagedInstanceGroupRequest holds parameters for unmanaged instance group creation.
+type CreateUnmanagedInstanceGroupRequest struct {
+	Name        string
+	Network     string
+	Description string
+}
+
 type gcpClient struct {
-	instances         *compute.InstancesClient
-	firewalls         *compute.FirewallsClient
-	disks             *compute.DisksClient
-	snapshots         *compute.SnapshotsClient
-	instanceTemplates *compute.InstanceTemplatesClient
-	instanceGroups    *compute.InstanceGroupManagersClient
-	autoscalers       *compute.AutoscalersClient
+	instances              *compute.InstancesClient
+	firewalls              *compute.FirewallsClient
+	disks                  *compute.DisksClient
+	snapshots              *compute.SnapshotsClient
+	instanceTemplates      *compute.InstanceTemplatesClient
+	instanceGroups         *compute.InstanceGroupManagersClient
+	autoscalers            *compute.AutoscalersClient
+	images                 *compute.ImagesClient
+	vpnTunnels             *compute.VpnTunnelsClient
+	unmanagedInstanceGroups *compute.InstanceGroupsClient
 }
 
 // NewClient creates a Client backed by the real GCP Compute API.
@@ -230,15 +299,30 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create autoscalers client: %w", err)
 	}
+	imgc, err := compute.NewImagesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create images client: %w", err)
+	}
+	vpnc, err := compute.NewVpnTunnelsRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create vpn tunnels client: %w", err)
+	}
+	uigc, err := compute.NewInstanceGroupsRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create instance groups client: %w", err)
+	}
 
 	return &gcpClient{
-		instances:         ic,
-		firewalls:         fc,
-		disks:             dc,
-		snapshots:         sc,
-		instanceTemplates: itc,
-		instanceGroups:    igc,
-		autoscalers:       ac,
+		instances:               ic,
+		firewalls:               fc,
+		disks:                   dc,
+		snapshots:               sc,
+		instanceTemplates:       itc,
+		instanceGroups:          igc,
+		autoscalers:             ac,
+		images:                  imgc,
+		vpnTunnels:              vpnc,
+		unmanagedInstanceGroups: uigc,
 	}, nil
 }
 

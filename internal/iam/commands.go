@@ -9,7 +9,6 @@ import (
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
 	"github.com/mosajjal/gcgo/internal/output"
-	"github.com/mosajjal/gcgo/internal/placeholder"
 	"github.com/spf13/cobra"
 )
 
@@ -23,8 +22,8 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	cmd.AddCommand(
 		newServiceAccountsCommand(cfg, creds),
 		newPolicyCommand(cfg, creds),
-		newDenyPoliciesCommand(),
-		newOrgPoliciesCommand(),
+		newDenyPoliciesCommand(cfg, creds),
+		newOrgPoliciesCommand(cfg, creds),
 		newRolesCommand(cfg, creds),
 		newFoldersCommand(cfg, creds),
 		newOrganizationsCommand(cfg, creds),
@@ -32,32 +31,6 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	)
 
 	return cmd
-}
-
-func newDenyPoliciesCommand() *cobra.Command {
-	const docsURL = "https://cloud.google.com/iam/docs/deny-overview"
-	return placeholder.NewGroup(
-		"deny-policies",
-		"Manage IAM deny policies",
-		docsURL,
-		placeholder.NewCommand("list", "List IAM deny policies", docsURL),
-		placeholder.NewCommand("describe", "Describe an IAM deny policy", docsURL),
-		placeholder.NewCommand("create", "Create an IAM deny policy", docsURL),
-		placeholder.NewCommand("delete", "Delete an IAM deny policy", docsURL),
-	)
-}
-
-func newOrgPoliciesCommand() *cobra.Command {
-	const docsURL = "https://cloud.google.com/resource-manager/docs/organization-policy/overview"
-	return placeholder.NewGroup(
-		"org-policies",
-		"Manage organization policies",
-		docsURL,
-		placeholder.NewCommand("list", "List organization policy constraints", docsURL),
-		placeholder.NewCommand("describe", "Describe an organization policy", docsURL),
-		placeholder.NewCommand("set", "Set an organization policy", docsURL),
-		placeholder.NewCommand("reset", "Reset an organization policy", docsURL),
-	)
 }
 
 func requireProject(cmd *cobra.Command, cfg *config.Config) (string, error) {

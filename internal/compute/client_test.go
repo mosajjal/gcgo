@@ -7,29 +7,35 @@ import (
 )
 
 type mockClient struct {
-	instances     []*Instance
-	instanceMap   map[string]*Instance
-	firewalls     []*FirewallRule
-	disks         []*Disk
-	diskMap       map[string]*Disk
-	snapshots     []*Snapshot
-	snapshotMap   map[string]*Snapshot
-	templates     []*InstanceTemplate
-	templateMap   map[string]*InstanceTemplate
-	groups        []*ManagedInstanceGroup
-	groupMap      map[string]*ManagedInstanceGroup
-	autoscalers   []*Autoscaler
-	autoscalerMap map[string]*Autoscaler
-	listErr       error
-	getErr        error
-	createErr     error
-	deleteErr     error
-	startErr      error
-	stopErr       error
-	resetErr      error
-	fwListErr     error
-	fwCreateErr   error
-	fwDeleteErr   error
+	instances      []*Instance
+	instanceMap    map[string]*Instance
+	firewalls      []*FirewallRule
+	disks          []*Disk
+	diskMap        map[string]*Disk
+	snapshots      []*Snapshot
+	snapshotMap    map[string]*Snapshot
+	templates      []*InstanceTemplate
+	templateMap    map[string]*InstanceTemplate
+	groups         []*ManagedInstanceGroup
+	groupMap       map[string]*ManagedInstanceGroup
+	autoscalers    []*Autoscaler
+	autoscalerMap  map[string]*Autoscaler
+	images         []*Image
+	imageMap       map[string]*Image
+	vpnTunnels     []*VPNTunnel
+	vpnTunnelMap   map[string]*VPNTunnel
+	uigs           []*UnmanagedInstanceGroup
+	uigMap         map[string]*UnmanagedInstanceGroup
+	listErr        error
+	getErr         error
+	createErr      error
+	deleteErr      error
+	startErr       error
+	stopErr        error
+	resetErr       error
+	fwListErr      error
+	fwCreateErr    error
+	fwDeleteErr    error
 }
 
 func (m *mockClient) ListInstances(_ context.Context, _, _ string) ([]*Instance, error) {
@@ -186,6 +192,72 @@ func (m *mockClient) CreateAutoscaler(_ context.Context, _, _ string, _ *CreateA
 }
 
 func (m *mockClient) DeleteAutoscaler(_ context.Context, _, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListImages(_ context.Context, _ string) ([]*Image, error) {
+	return m.images, m.listErr
+}
+
+func (m *mockClient) GetImage(_ context.Context, _, name string) (*Image, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if img, ok := m.imageMap[name]; ok {
+		return img, nil
+	}
+	return nil, fmt.Errorf("image %q not found", name)
+}
+
+func (m *mockClient) CreateImage(_ context.Context, _ string, _ *CreateImageRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteImage(_ context.Context, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListVPNTunnels(_ context.Context, _, _ string) ([]*VPNTunnel, error) {
+	return m.vpnTunnels, m.listErr
+}
+
+func (m *mockClient) GetVPNTunnel(_ context.Context, _, _, name string) (*VPNTunnel, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if t, ok := m.vpnTunnelMap[name]; ok {
+		return t, nil
+	}
+	return nil, fmt.Errorf("vpn tunnel %q not found", name)
+}
+
+func (m *mockClient) CreateVPNTunnel(_ context.Context, _, _ string, _ *CreateVPNTunnelRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteVPNTunnel(_ context.Context, _, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListUnmanagedInstanceGroups(_ context.Context, _, _ string) ([]*UnmanagedInstanceGroup, error) {
+	return m.uigs, m.listErr
+}
+
+func (m *mockClient) GetUnmanagedInstanceGroup(_ context.Context, _, _, name string) (*UnmanagedInstanceGroup, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if g, ok := m.uigMap[name]; ok {
+		return g, nil
+	}
+	return nil, fmt.Errorf("unmanaged instance group %q not found", name)
+}
+
+func (m *mockClient) CreateUnmanagedInstanceGroup(_ context.Context, _, _ string, _ *CreateUnmanagedInstanceGroupRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteUnmanagedInstanceGroup(_ context.Context, _, _, _ string) error {
 	return m.deleteErr
 }
 

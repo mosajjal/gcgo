@@ -41,8 +41,8 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		newTargetHttpsProxiesCommand(cfg, creds),
 		newTargetTcpProxiesCommand(cfg, creds),
 		newTargetSslProxiesCommand(cfg, creds),
-		newImagesCommand(),
-		newVPNTunnelsCommand(),
+		newImagesCommand(cfg, creds),
+		newVPNTunnelsCommand(cfg, creds),
 		newSSHCommand(cfg, creds),
 		newSCPCommand(cfg, creds),
 	)

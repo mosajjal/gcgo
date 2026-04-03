@@ -374,7 +374,7 @@ func newDatabasesDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cob
 
 func newDatabasesExecuteSQLCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "execute-sql SQL",
+		Use:   "execute-sql DATABASE",
 		Short: "Execute a SQL statement against a Spanner database",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -382,13 +382,13 @@ func newDatabasesExecuteSQLCommand(cfg *config.Config, creds *auth.Credentials) 
 			if err != nil {
 				return err
 			}
-			instance, _ := cmd.Flags().GetString("instance")
-			if instance == "" {
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
 				return fmt.Errorf("--instance is required")
 			}
-			db, _ := cmd.Flags().GetString("database")
-			if db == "" {
-				return fmt.Errorf("--database is required")
+			sql, _ := cmd.Flags().GetString("sql")
+			if sql == "" {
+				return fmt.Errorf("--sql is required")
 			}
 
 			ctx := context.Background()
@@ -397,7 +397,7 @@ func newDatabasesExecuteSQLCommand(cfg *config.Config, creds *auth.Credentials) 
 				return err
 			}
 
-			result, err := client.ExecuteSQL(ctx, project, instance, db, args[0])
+			result, err := client.ExecuteSQL(ctx, project, inst, args[0], sql)
 			if err != nil {
 				return err
 			}
@@ -412,7 +412,7 @@ func newDatabasesExecuteSQLCommand(cfg *config.Config, creds *auth.Credentials) 
 	}
 
 	cmd.Flags().String("instance", "", "Spanner instance name")
-	cmd.Flags().String("database", "", "Spanner database name")
+	cmd.Flags().String("sql", "", "SQL statement to execute")
 
 	return cmd
 }

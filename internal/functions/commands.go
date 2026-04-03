@@ -52,7 +52,7 @@ func makeClient(ctx context.Context, creds *auth.Credentials) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(ctx, opt)
+	return NewClient(ctx, creds, opt)
 }
 
 func newListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
