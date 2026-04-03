@@ -32,6 +32,62 @@ type FirewallRule struct {
 	SourceRanges []string `json:"source_ranges"`
 }
 
+// Disk holds persistent disk fields.
+type Disk struct {
+	Name        string `json:"name"`
+	Zone        string `json:"zone"`
+	SizeGb      int64  `json:"size_gb"`
+	Type        string `json:"type"`
+	Status      string `json:"status"`
+	SourceImage string `json:"source_image,omitempty"`
+}
+
+// Snapshot holds snapshot fields.
+type Snapshot struct {
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	SourceDisk   string `json:"source_disk,omitempty"`
+	StorageBytes int64  `json:"storage_bytes"`
+}
+
+// InstanceTemplate holds instance template fields.
+type InstanceTemplate struct {
+	Name           string `json:"name"`
+	Description    string `json:"description,omitempty"`
+	MachineType    string `json:"machine_type,omitempty"`
+	Network        string `json:"network,omitempty"`
+	Subnetwork     string `json:"subnetwork,omitempty"`
+	SourceImage    string `json:"source_image,omitempty"`
+	Region         string `json:"region,omitempty"`
+	SelfLink       string `json:"self_link,omitempty"`
+	SourceInstance string `json:"source_instance,omitempty"`
+}
+
+// ManagedInstanceGroup holds managed instance group fields.
+type ManagedInstanceGroup struct {
+	Name             string `json:"name"`
+	Zone             string `json:"zone,omitempty"`
+	Description      string `json:"description,omitempty"`
+	BaseInstanceName string `json:"base_instance_name,omitempty"`
+	InstanceTemplate string `json:"instance_template,omitempty"`
+	TargetSize       int32  `json:"target_size"`
+	Status           string `json:"status,omitempty"`
+	Autoscaler       string `json:"autoscaler,omitempty"`
+}
+
+// Autoscaler holds autoscaler fields.
+type Autoscaler struct {
+	Name            string  `json:"name"`
+	Zone            string  `json:"zone,omitempty"`
+	Description     string  `json:"description,omitempty"`
+	Target          string  `json:"target,omitempty"`
+	MinReplicas     int32   `json:"min_replicas"`
+	MaxReplicas     int32   `json:"max_replicas"`
+	CpuUtilization  float64 `json:"cpu_utilization,omitempty"`
+	Status          string  `json:"status,omitempty"`
+	RecommendedSize int32   `json:"recommended_size,omitempty"`
+}
+
 // Client defines compute operations.
 type Client interface {
 	ListInstances(ctx context.Context, project, zone string) ([]*Instance, error)
@@ -44,6 +100,26 @@ type Client interface {
 	ListFirewallRules(ctx context.Context, project string) ([]*FirewallRule, error)
 	CreateFirewallRule(ctx context.Context, project string, req *CreateFirewallRequest) error
 	DeleteFirewallRule(ctx context.Context, project, name string) error
+	ListDisks(ctx context.Context, project, zone string) ([]*Disk, error)
+	GetDisk(ctx context.Context, project, zone, name string) (*Disk, error)
+	CreateDisk(ctx context.Context, project, zone string, req *CreateDiskRequest) error
+	DeleteDisk(ctx context.Context, project, zone, name string) error
+	ListSnapshots(ctx context.Context, project string) ([]*Snapshot, error)
+	GetSnapshot(ctx context.Context, project, name string) (*Snapshot, error)
+	CreateSnapshot(ctx context.Context, project, zone string, req *CreateSnapshotRequest) error
+	DeleteSnapshot(ctx context.Context, project, name string) error
+	ListInstanceTemplates(ctx context.Context, project string) ([]*InstanceTemplate, error)
+	GetInstanceTemplate(ctx context.Context, project, name string) (*InstanceTemplate, error)
+	CreateInstanceTemplate(ctx context.Context, project string, req *CreateInstanceTemplateRequest) error
+	DeleteInstanceTemplate(ctx context.Context, project, name string) error
+	ListInstanceGroupManagers(ctx context.Context, project, zone string) ([]*ManagedInstanceGroup, error)
+	GetInstanceGroupManager(ctx context.Context, project, zone, name string) (*ManagedInstanceGroup, error)
+	CreateInstanceGroupManager(ctx context.Context, project, zone string, req *CreateInstanceGroupManagerRequest) error
+	DeleteInstanceGroupManager(ctx context.Context, project, zone, name string) error
+	ListAutoscalers(ctx context.Context, project, zone string) ([]*Autoscaler, error)
+	GetAutoscaler(ctx context.Context, project, zone, name string) (*Autoscaler, error)
+	CreateAutoscaler(ctx context.Context, project, zone string, req *CreateAutoscalerRequest) error
+	DeleteAutoscaler(ctx context.Context, project, zone, name string) error
 }
 
 // CreateInstanceRequest holds parameters for instance creation.
@@ -67,9 +143,60 @@ type CreateFirewallRequest struct {
 	TargetTags   []string
 }
 
+// CreateDiskRequest holds parameters for disk creation.
+type CreateDiskRequest struct {
+	Name         string
+	SizeGb       int64
+	Type         string
+	ImageFamily  string
+	ImageProject string
+}
+
+// CreateSnapshotRequest holds parameters for snapshot creation.
+type CreateSnapshotRequest struct {
+	Name        string
+	SourceDisk  string
+	Description string
+}
+
+// CreateInstanceTemplateRequest holds parameters for instance template creation.
+type CreateInstanceTemplateRequest struct {
+	Name         string
+	MachineType  string
+	ImageFamily  string
+	ImageProject string
+	Network      string
+	Subnet       string
+	Description  string
+}
+
+// CreateInstanceGroupManagerRequest holds parameters for managed instance group creation.
+type CreateInstanceGroupManagerRequest struct {
+	Name             string
+	Template         string
+	BaseInstanceName string
+	TargetSize       int32
+	Description      string
+}
+
+// CreateAutoscalerRequest holds parameters for autoscaler creation.
+type CreateAutoscalerRequest struct {
+	Name           string
+	Target         string
+	MinReplicas    int32
+	MaxReplicas    int32
+	CpuUtilization float64
+	Description    string
+}
+
 type gcpClient struct {
-	instances *compute.InstancesClient
-	firewalls *compute.FirewallsClient
+	instances         *compute.InstancesClient
+	firewalls         *compute.FirewallsClient
+	disks             *compute.DisksClient
+	snapshots         *compute.SnapshotsClient
+	instanceTemplates *compute.InstanceTemplatesClient
+	instanceGroups    *compute.InstanceGroupManagersClient
+	autoscalers       *compute.AutoscalersClient
 }
 
 // NewClient creates a Client backed by the real GCP Compute API.
@@ -83,8 +210,36 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create firewalls client: %w", err)
 	}
+	dc, err := compute.NewDisksRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create disks client: %w", err)
+	}
+	sc, err := compute.NewSnapshotsRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create snapshots client: %w", err)
+	}
+	itc, err := compute.NewInstanceTemplatesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create instance templates client: %w", err)
+	}
+	igc, err := compute.NewInstanceGroupManagersRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create instance group managers client: %w", err)
+	}
+	ac, err := compute.NewAutoscalersRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create autoscalers client: %w", err)
+	}
 
-	return &gcpClient{instances: ic, firewalls: fc}, nil
+	return &gcpClient{
+		instances:         ic,
+		firewalls:         fc,
+		disks:             dc,
+		snapshots:         sc,
+		instanceTemplates: itc,
+		instanceGroups:    igc,
+		autoscalers:       ac,
+	}, nil
 }
 
 func (c *gcpClient) ListInstances(ctx context.Context, project, zone string) ([]*Instance, error) {
@@ -277,6 +432,137 @@ func (c *gcpClient) DeleteFirewallRule(ctx context.Context, project, name string
 	return op.Wait(ctx)
 }
 
+func (c *gcpClient) ListDisks(ctx context.Context, project, zone string) ([]*Disk, error) {
+	it := c.disks.List(ctx, &computepb.ListDisksRequest{
+		Project: project,
+		Zone:    zone,
+	})
+
+	var disks []*Disk
+	for {
+		disk, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list disks: %w", err)
+		}
+		disks = append(disks, diskFromProto(disk))
+	}
+	return disks, nil
+}
+
+func (c *gcpClient) GetDisk(ctx context.Context, project, zone, name string) (*Disk, error) {
+	disk, err := c.disks.Get(ctx, &computepb.GetDiskRequest{
+		Project: project,
+		Zone:    zone,
+		Disk:    name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get disk %s: %w", name, err)
+	}
+	return diskFromProto(disk), nil
+}
+
+func (c *gcpClient) CreateDisk(ctx context.Context, project, zone string, req *CreateDiskRequest) error {
+	sizeGb := req.SizeGb
+	if sizeGb == 0 {
+		sizeGb = 10
+	}
+	diskType := req.Type
+	if diskType == "" {
+		diskType = "pd-balanced"
+	}
+	diskTypeURL := fmt.Sprintf("zones/%s/diskTypes/%s", zone, diskType)
+
+	pbReq := &computepb.InsertDiskRequest{
+		Project: project,
+		Zone:    zone,
+		DiskResource: &computepb.Disk{
+			Name:   &req.Name,
+			SizeGb: &sizeGb,
+			Type:   &diskTypeURL,
+		},
+	}
+	if req.ImageFamily != "" && req.ImageProject != "" {
+		sourceImage := fmt.Sprintf("projects/%s/global/images/family/%s", req.ImageProject, req.ImageFamily)
+		pbReq.SourceImage = &sourceImage
+	}
+
+	op, err := c.disks.Insert(ctx, pbReq)
+	if err != nil {
+		return fmt.Errorf("create disk %s: %w", req.Name, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) DeleteDisk(ctx context.Context, project, zone, name string) error {
+	op, err := c.disks.Delete(ctx, &computepb.DeleteDiskRequest{
+		Project: project,
+		Zone:    zone,
+		Disk:    name,
+	})
+	if err != nil {
+		return fmt.Errorf("delete disk %s: %w", name, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) ListSnapshots(ctx context.Context, project string) ([]*Snapshot, error) {
+	it := c.snapshots.List(ctx, &computepb.ListSnapshotsRequest{Project: project})
+
+	var snapshots []*Snapshot
+	for {
+		snapshot, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list snapshots: %w", err)
+		}
+		snapshots = append(snapshots, snapshotFromProto(snapshot))
+	}
+	return snapshots, nil
+}
+
+func (c *gcpClient) GetSnapshot(ctx context.Context, project, name string) (*Snapshot, error) {
+	snapshot, err := c.snapshots.Get(ctx, &computepb.GetSnapshotRequest{
+		Project:  project,
+		Snapshot: name,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get snapshot %s: %w", name, err)
+	}
+	return snapshotFromProto(snapshot), nil
+}
+
+func (c *gcpClient) CreateSnapshot(ctx context.Context, project, zone string, req *CreateSnapshotRequest) error {
+	op, err := c.disks.CreateSnapshot(ctx, &computepb.CreateSnapshotDiskRequest{
+		Project: project,
+		Zone:    zone,
+		Disk:    req.SourceDisk,
+		SnapshotResource: &computepb.Snapshot{
+			Name:        &req.Name,
+			Description: strPtrOrNil(req.Description),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("create snapshot %s from disk %s: %w", req.Name, req.SourceDisk, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) DeleteSnapshot(ctx context.Context, project, name string) error {
+	op, err := c.snapshots.Delete(ctx, &computepb.DeleteSnapshotRequest{
+		Project:  project,
+		Snapshot: name,
+	})
+	if err != nil {
+		return fmt.Errorf("delete snapshot %s: %w", name, err)
+	}
+	return op.Wait(ctx)
+}
+
 func instanceFromProto(inst *computepb.Instance) *Instance {
 	i := &Instance{
 		Name:        inst.GetName(),
@@ -318,6 +604,26 @@ func firewallFromProto(fw *computepb.Firewall) *FirewallRule {
 		Priority:     int64(fw.GetPriority()),
 		Allowed:      allowed,
 		SourceRanges: fw.GetSourceRanges(),
+	}
+}
+
+func diskFromProto(disk *computepb.Disk) *Disk {
+	return &Disk{
+		Name:        disk.GetName(),
+		Zone:        disk.GetZone(),
+		SizeGb:      disk.GetSizeGb(),
+		Type:        disk.GetType(),
+		Status:      disk.GetStatus(),
+		SourceImage: disk.GetSourceImage(),
+	}
+}
+
+func snapshotFromProto(snapshot *computepb.Snapshot) *Snapshot {
+	return &Snapshot{
+		Name:         snapshot.GetName(),
+		Status:       snapshot.GetStatus(),
+		SourceDisk:   snapshot.GetSourceDisk(),
+		StorageBytes: snapshot.GetStorageBytes(),
 	}
 }
 

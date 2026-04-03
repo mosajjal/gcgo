@@ -94,8 +94,8 @@ Check off tasks as completed. Work top to bottom — later tasks depend on earli
 - [x] `gcgo storage rb gs://BUCKET` — remove bucket
 - [x] Parse `gs://` URIs correctly
 - [x] Unit tests for URI parsing
-- [ ] GCS-to-GCS copy support
-- [ ] Large file parallel upload support (>5MB threshold)
+- [x] GCS-to-GCS copy support
+- [x] Large file parallel upload support (>5MB threshold)
 
 ## Phase 3: Platform Services
 
@@ -123,18 +123,49 @@ Check off tasks as completed. Work top to bottom — later tasks depend on earli
 - [x] Wire into root command
 - [x] Unit tests for output formatting
 
+### 3.4 Extended Service Coverage
+- [x] Create `internal/services/` — Service Usage client + commands
+- [x] `gcgo services list`
+- [x] `gcgo services describe SERVICE`
+- [x] `gcgo services enable SERVICE`
+- [x] `gcgo services disable SERVICE`
+- [x] Create `internal/deploy/` — Cloud Deploy client + commands
+- [x] `gcgo deploy delivery-pipelines list|describe|create|delete`
+- [x] `gcgo deploy releases list|describe|create`
+- [x] Create `internal/eventarc/` — Eventarc client + commands
+- [x] `gcgo eventarc triggers list|describe|create|delete`
+- [x] Create `internal/tasks/` — Cloud Tasks client + commands
+- [x] `gcgo tasks queues list|describe|create|delete`
+- [x] `gcgo tasks tasks list|describe|create|delete --queue=QUEUE`
+- [x] Create `internal/workflows/` — Workflows client + commands
+- [x] `gcgo workflows list|describe|deploy|delete`
+- [x] Create `internal/redis/` — Memorystore for Redis client + commands
+- [x] `gcgo redis instances list|describe|create|delete`
+- [x] Create `internal/alloydb/` — AlloyDB client + commands
+- [x] `gcgo alloydb clusters list|describe|create|delete`
+- [x] `gcgo alloydb instances list|describe|create|delete --cluster=CLUSTER`
+- [x] Create `internal/bigtable/` — Bigtable admin client + commands
+- [x] `gcgo bigtable instances list|describe`
+- [x] `gcgo bigtable tables list|describe|create|delete --instance=INSTANCE`
+- [x] Create `internal/firestore/` — Firestore admin client + commands
+- [x] `gcgo firestore list|describe`
+- [x] `gcgo firestore export|import DATABASE`
+- [x] Wire all extended services into root command
+- [x] README examples updated for extended services
+- [x] Validation: `go test ./...`, integration compile pass, and `go vet ./...`
+
 ## Phase 4: Polish & Testing
 
 ### 4.1 End-to-End Test Suite
 - [x] Create `test/e2e/` framework — setup/teardown helpers, test project config
 - [x] E2E: config set/get/list/unset round-trip
 - [x] E2E: auth list + revoke idempotent
-- [ ] E2E: create instance -> list -> describe -> stop -> start -> delete
-- [ ] E2E: create bucket -> upload file -> list -> download -> delete file -> delete bucket
-- [ ] E2E: create service account -> list -> add IAM binding -> remove binding -> delete
-- [ ] E2E: GKE get-credentials (requires existing cluster)
-- [ ] E2E: Cloud Run deploy -> describe -> delete (requires container image)
-- [ ] E2E: logging read with known filter
+- [x] E2E: create instance -> list -> describe -> stop -> start -> delete
+- [x] E2E: create bucket -> upload file -> list -> download -> delete file -> delete bucket
+- [x] E2E: create service account -> list -> add IAM binding -> remove binding -> delete
+- [x] E2E: GKE get-credentials (requires existing cluster)
+- [x] E2E: Cloud Run deploy -> describe -> delete (requires container image)
+- [x] E2E: logging read with known filter
 
 ### 4.2 Security Hardening
 - [x] Audit: no credentials in error messages or logs

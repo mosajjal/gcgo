@@ -70,6 +70,24 @@ Not a full gcloud replacement — covers the commands people actually use daily.
 - `gcgo projects list` — list accessible projects
 - `gcgo projects describe PROJECT` — project details
 
+### FR-10: Extended Platform Services
+- `gcgo services list/describe/enable/disable SERVICE` — manage Google API service enablement
+- `gcgo deploy delivery-pipelines list/describe/create/delete` — manage Cloud Deploy delivery pipelines
+- `gcgo deploy releases list/describe/create` — manage Cloud Deploy releases
+- `gcgo eventarc triggers list/describe/create/delete` — manage Eventarc triggers
+- `gcgo tasks queues list/describe/create/delete` — manage Cloud Tasks queues
+- `gcgo tasks tasks list/describe/create/delete --queue=QUEUE` — manage Cloud Tasks tasks
+- `gcgo workflows list/describe/deploy/delete` — manage Workflows definitions
+
+### FR-11: Extended Data Services
+- `gcgo redis instances list/describe/create/delete` — manage Memorystore for Redis instances
+- `gcgo alloydb clusters list/describe/create/delete` — manage AlloyDB clusters
+- `gcgo alloydb instances list/describe/create/delete --cluster=CLUSTER` — manage AlloyDB instances
+- `gcgo bigtable instances list/describe` — inspect Cloud Bigtable instances
+- `gcgo bigtable tables list/describe/create/delete --instance=INSTANCE` — manage Cloud Bigtable tables
+- `gcgo firestore list/describe` — inspect Firestore databases
+- `gcgo firestore export/import DATABASE` — launch Firestore export/import operations
+
 ## Non-Functional Requirements
 
 ### NFR-01: Performance

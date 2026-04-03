@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	logging "cloud.google.com/go/logging/apiv2"
+	clogging "cloud.google.com/go/logging/apiv2"
 	"cloud.google.com/go/logging/apiv2/loggingpb"
+	loggingapi "google.golang.org/api/logging/v2"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -21,22 +22,46 @@ type Entry struct {
 	Payload   string `json:"payload"`
 }
 
+// Sink holds logging sink fields for display.
+type Sink struct {
+	Name              string `json:"name"`
+	ResourceName      string `json:"resource_name"`
+	Description       string `json:"description"`
+	Destination       string `json:"destination"`
+	Filter            string `json:"filter"`
+	Disabled          bool   `json:"disabled"`
+	IncludeChildren   bool   `json:"include_children"`
+	InterceptChildren bool   `json:"intercept_children"`
+	CreateTime        string `json:"create_time"`
+	UpdateTime        string `json:"update_time"`
+	WriterIdentity    string `json:"writer_identity"`
+}
+
 // Client defines logging operations.
 type Client interface {
 	ReadLogs(ctx context.Context, project, filter string, limit int) ([]*Entry, error)
+	ListSinks(ctx context.Context, parent, filter string) ([]*Sink, error)
+	GetSink(ctx context.Context, name string) (*Sink, error)
+	CreateSink(ctx context.Context, parent string, sink *loggingapi.LogSink) (*Sink, error)
+	DeleteSink(ctx context.Context, name string) error
 }
 
 type gcpClient struct {
-	lc *logging.Client
+	lc  *clogging.Client
+	api *loggingapi.Service
 }
 
 // NewClient creates a Client backed by the real Cloud Logging API.
 func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error) {
-	lc, err := logging.NewClient(ctx, opts...)
+	lc, err := clogging.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create logging client: %w", err)
 	}
-	return &gcpClient{lc: lc}, nil
+	api, err := loggingapi.NewService(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create logging sink client: %w", err)
+	}
+	return &gcpClient{lc: lc, api: api}, nil
 }
 
 func (c *gcpClient) ReadLogs(ctx context.Context, project, filter string, limit int) ([]*Entry, error) {
@@ -65,6 +90,50 @@ func (c *gcpClient) ReadLogs(ctx context.Context, project, filter string, limit 
 	return entries, nil
 }
 
+func (c *gcpClient) ListSinks(ctx context.Context, parent, filter string) ([]*Sink, error) {
+	call := c.api.Sinks.List(parent).Context(ctx)
+	if filter != "" {
+		call = call.Filter(filter)
+	}
+
+	var sinks []*Sink
+	if err := call.Pages(ctx, func(resp *loggingapi.ListSinksResponse) error {
+		for _, sink := range resp.Sinks {
+			sinks = append(sinks, sinkFromAPI(sink))
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("list logging sinks: %w", err)
+	}
+	return sinks, nil
+}
+
+func (c *gcpClient) GetSink(ctx context.Context, name string) (*Sink, error) {
+	sink, err := c.api.Sinks.Get(name).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("get logging sink %s: %w", name, err)
+	}
+	return sinkFromAPI(sink), nil
+}
+
+func (c *gcpClient) CreateSink(ctx context.Context, parent string, sink *loggingapi.LogSink) (*Sink, error) {
+	if sink == nil {
+		return nil, fmt.Errorf("create logging sink: nil sink")
+	}
+	created, err := c.api.Sinks.Create(parent, sink).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("create logging sink %s: %w", sink.Name, err)
+	}
+	return sinkFromAPI(created), nil
+}
+
+func (c *gcpClient) DeleteSink(ctx context.Context, name string) error {
+	if _, err := c.api.Sinks.Delete(name).Context(ctx).Do(); err != nil {
+		return fmt.Errorf("delete logging sink %s: %w", name, err)
+	}
+	return nil
+}
+
 func entryFromProto(e *loggingpb.LogEntry) *Entry {
 	var ts string
 	if e.GetTimestamp() != nil {
@@ -86,5 +155,24 @@ func entryFromProto(e *loggingpb.LogEntry) *Entry {
 		Severity:  e.GetSeverity().String(),
 		LogName:   e.GetLogName(),
 		Payload:   payload,
+	}
+}
+
+func sinkFromAPI(sink *loggingapi.LogSink) *Sink {
+	if sink == nil {
+		return nil
+	}
+	return &Sink{
+		Name:              sink.Name,
+		ResourceName:      sink.ResourceName,
+		Description:       sink.Description,
+		Destination:       sink.Destination,
+		Filter:            sink.Filter,
+		Disabled:          sink.Disabled,
+		IncludeChildren:   sink.IncludeChildren,
+		InterceptChildren: sink.InterceptChildren,
+		CreateTime:        sink.CreateTime,
+		UpdateTime:        sink.UpdateTime,
+		WriterIdentity:    sink.WriterIdentity,
 	}
 }

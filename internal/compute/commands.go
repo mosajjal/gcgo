@@ -22,12 +22,326 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 
 	cmd.AddCommand(
 		newInstancesCommand(cfg, creds),
+		newInstanceTemplatesCommand(cfg, creds),
+		newInstanceGroupsCommand(cfg, creds),
+		newAutoscalersCommand(cfg, creds),
+		newDisksCommand(cfg, creds),
+		newSnapshotsCommand(cfg, creds),
 		newFirewallRulesCommand(cfg, creds),
+		newNetworksCommand(cfg, creds),
+		newSubnetsCommand(cfg, creds),
+		newAddressesCommand(cfg, creds),
+		newRoutersCommand(cfg, creds),
+		newRoutesCommand(cfg, creds),
+		newForwardingRulesCommand(cfg, creds),
+		newBackendServicesCommand(cfg, creds),
+		newHealthChecksCommand(cfg, creds),
+		newUrlMapsCommand(cfg, creds),
+		newTargetHttpProxiesCommand(cfg, creds),
+		newTargetHttpsProxiesCommand(cfg, creds),
+		newTargetTcpProxiesCommand(cfg, creds),
+		newTargetSslProxiesCommand(cfg, creds),
+		newImagesCommand(),
+		newVPNTunnelsCommand(),
 		newSSHCommand(cfg, creds),
 		newSCPCommand(cfg, creds),
 	)
 
 	return cmd
+}
+
+func newDisksCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "disks",
+		Short: "Manage persistent disks",
+	}
+
+	cmd.AddCommand(
+		newDisksListCommand(cfg, creds),
+		newDisksDescribeCommand(cfg, creds),
+		newDisksCreateCommand(cfg, creds),
+		newDisksDeleteCommand(cfg, creds),
+	)
+
+	return cmd
+}
+
+func newDisksListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List persistent disks",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			disks, err := client.ListDisks(ctx, project, zone)
+			if err != nil {
+				return err
+			}
+
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), disks)
+			}
+
+			headers := []string{"NAME", "ZONE", "SIZE_GB", "TYPE", "STATUS"}
+			rows := make([][]string, len(disks))
+			for i, disk := range disks {
+				rows[i] = []string{disk.Name, disk.Zone, fmt.Sprintf("%d", disk.SizeGb), disk.Type, disk.Status}
+			}
+			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
+		},
+	}
+
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
+}
+
+func newDisksDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "describe DISK",
+		Short: "Describe a persistent disk",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			disk, err := client.GetDisk(ctx, project, zone, args[0])
+			if err != nil {
+				return err
+			}
+			return output.PrintJSON(cmd.OutOrStdout(), disk)
+		},
+	}
+
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
+}
+
+func newDisksCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var req CreateDiskRequest
+
+	cmd := &cobra.Command{
+		Use:   "create DISK",
+		Short: "Create a persistent disk",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			req.Name = args[0]
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.CreateDisk(ctx, project, zone, &req); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Created disk %q.\n", req.Name)
+			return nil
+		},
+	}
+
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().Int64Var(&req.SizeGb, "size", 10, "Disk size in GB")
+	cmd.Flags().StringVar(&req.Type, "type", "pd-balanced", "Disk type")
+	cmd.Flags().StringVar(&req.ImageFamily, "image-family", "", "Optional source image family")
+	cmd.Flags().StringVar(&req.ImageProject, "image-project", "", "Optional source image project")
+	return cmd
+}
+
+func newDisksDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete DISK",
+		Short: "Delete a persistent disk",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.DeleteDisk(ctx, project, zone, args[0]); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted disk %q.\n", args[0])
+			return nil
+		},
+	}
+
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	return cmd
+}
+
+func newSnapshotsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snapshots",
+		Short: "Manage persistent disk snapshots",
+	}
+
+	cmd.AddCommand(
+		newSnapshotsListCommand(cfg, creds),
+		newSnapshotsDescribeCommand(cfg, creds),
+		newSnapshotsCreateCommand(cfg, creds),
+		newSnapshotsDeleteCommand(cfg, creds),
+	)
+
+	return cmd
+}
+
+func newSnapshotsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List snapshots",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			snapshots, err := client.ListSnapshots(ctx, project)
+			if err != nil {
+				return err
+			}
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), snapshots)
+			}
+			headers := []string{"NAME", "STATUS", "SOURCE_DISK", "STORAGE_BYTES"}
+			rows := make([][]string, len(snapshots))
+			for i, snapshot := range snapshots {
+				rows[i] = []string{snapshot.Name, snapshot.Status, snapshot.SourceDisk, fmt.Sprintf("%d", snapshot.StorageBytes)}
+			}
+			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
+		},
+	}
+}
+
+func newSnapshotsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	return &cobra.Command{
+		Use:   "describe SNAPSHOT",
+		Short: "Describe a snapshot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			snapshot, err := client.GetSnapshot(ctx, project, args[0])
+			if err != nil {
+				return err
+			}
+			return output.PrintJSON(cmd.OutOrStdout(), snapshot)
+		},
+	}
+}
+
+func newSnapshotsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var req CreateSnapshotRequest
+
+	cmd := &cobra.Command{
+		Use:   "create SNAPSHOT",
+		Short: "Create a snapshot from a disk",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if req.SourceDisk == "" {
+				return fmt.Errorf("--source-disk is required")
+			}
+			req.Name = args[0]
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.CreateSnapshot(ctx, project, zone, &req); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Created snapshot %q.\n", req.Name)
+			return nil
+		},
+	}
+
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringVar(&req.SourceDisk, "source-disk", "", "Source persistent disk")
+	cmd.Flags().StringVar(&req.Description, "description", "", "Snapshot description")
+	return cmd
+}
+
+func newSnapshotsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete SNAPSHOT",
+		Short: "Delete a snapshot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.DeleteSnapshot(ctx, project, args[0]); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted snapshot %q.\n", args[0])
+			return nil
+		},
+	}
 }
 
 func newInstancesCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {

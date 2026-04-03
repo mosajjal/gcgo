@@ -7,19 +7,29 @@ import (
 )
 
 type mockClient struct {
-	instances   []*Instance
-	instanceMap map[string]*Instance
-	firewalls   []*FirewallRule
-	listErr     error
-	getErr      error
-	createErr   error
-	deleteErr   error
-	startErr    error
-	stopErr     error
-	resetErr    error
-	fwListErr   error
-	fwCreateErr error
-	fwDeleteErr error
+	instances     []*Instance
+	instanceMap   map[string]*Instance
+	firewalls     []*FirewallRule
+	disks         []*Disk
+	diskMap       map[string]*Disk
+	snapshots     []*Snapshot
+	snapshotMap   map[string]*Snapshot
+	templates     []*InstanceTemplate
+	templateMap   map[string]*InstanceTemplate
+	groups        []*ManagedInstanceGroup
+	groupMap      map[string]*ManagedInstanceGroup
+	autoscalers   []*Autoscaler
+	autoscalerMap map[string]*Autoscaler
+	listErr       error
+	getErr        error
+	createErr     error
+	deleteErr     error
+	startErr      error
+	stopErr       error
+	resetErr      error
+	fwListErr     error
+	fwCreateErr   error
+	fwDeleteErr   error
 }
 
 func (m *mockClient) ListInstances(_ context.Context, _, _ string) ([]*Instance, error) {
@@ -67,6 +77,116 @@ func (m *mockClient) CreateFirewallRule(_ context.Context, _ string, _ *CreateFi
 
 func (m *mockClient) DeleteFirewallRule(_ context.Context, _, _ string) error {
 	return m.fwDeleteErr
+}
+
+func (m *mockClient) ListDisks(_ context.Context, _, _ string) ([]*Disk, error) {
+	return m.disks, m.listErr
+}
+
+func (m *mockClient) GetDisk(_ context.Context, _, _, name string) (*Disk, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if disk, ok := m.diskMap[name]; ok {
+		return disk, nil
+	}
+	return nil, fmt.Errorf("disk %q not found", name)
+}
+
+func (m *mockClient) CreateDisk(_ context.Context, _, _ string, _ *CreateDiskRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteDisk(_ context.Context, _, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListSnapshots(_ context.Context, _ string) ([]*Snapshot, error) {
+	return m.snapshots, m.listErr
+}
+
+func (m *mockClient) GetSnapshot(_ context.Context, _, name string) (*Snapshot, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if snapshot, ok := m.snapshotMap[name]; ok {
+		return snapshot, nil
+	}
+	return nil, fmt.Errorf("snapshot %q not found", name)
+}
+
+func (m *mockClient) CreateSnapshot(_ context.Context, _, _ string, _ *CreateSnapshotRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteSnapshot(_ context.Context, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListInstanceTemplates(_ context.Context, _ string) ([]*InstanceTemplate, error) {
+	return m.templates, m.listErr
+}
+
+func (m *mockClient) GetInstanceTemplate(_ context.Context, _, name string) (*InstanceTemplate, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if tpl, ok := m.templateMap[name]; ok {
+		return tpl, nil
+	}
+	return nil, fmt.Errorf("instance template %q not found", name)
+}
+
+func (m *mockClient) CreateInstanceTemplate(_ context.Context, _ string, _ *CreateInstanceTemplateRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteInstanceTemplate(_ context.Context, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListInstanceGroupManagers(_ context.Context, _, _ string) ([]*ManagedInstanceGroup, error) {
+	return m.groups, m.listErr
+}
+
+func (m *mockClient) GetInstanceGroupManager(_ context.Context, _, _, name string) (*ManagedInstanceGroup, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if group, ok := m.groupMap[name]; ok {
+		return group, nil
+	}
+	return nil, fmt.Errorf("managed instance group %q not found", name)
+}
+
+func (m *mockClient) CreateInstanceGroupManager(_ context.Context, _, _ string, _ *CreateInstanceGroupManagerRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteInstanceGroupManager(_ context.Context, _, _, _ string) error {
+	return m.deleteErr
+}
+
+func (m *mockClient) ListAutoscalers(_ context.Context, _, _ string) ([]*Autoscaler, error) {
+	return m.autoscalers, m.listErr
+}
+
+func (m *mockClient) GetAutoscaler(_ context.Context, _, _, name string) (*Autoscaler, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	if autoscaler, ok := m.autoscalerMap[name]; ok {
+		return autoscaler, nil
+	}
+	return nil, fmt.Errorf("autoscaler %q not found", name)
+}
+
+func (m *mockClient) CreateAutoscaler(_ context.Context, _, _ string, _ *CreateAutoscalerRequest) error {
+	return m.createErr
+}
+
+func (m *mockClient) DeleteAutoscaler(_ context.Context, _, _, _ string) error {
+	return m.deleteErr
 }
 
 func TestMockListInstances(t *testing.T) {

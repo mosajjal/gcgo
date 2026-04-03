@@ -7,19 +7,23 @@ import (
 )
 
 type mockClient struct {
-	accounts     []*ServiceAccount
-	keys         []*SAKey
-	bindings     []*IAMBinding
-	createdKey   []byte
-	listErr      error
-	createErr    error
-	deleteErr    error
-	listKeysErr  error
-	createKeyErr error
-	deleteKeyErr error
-	getPolicyErr error
-	addBindErr   error
-	rmBindErr    error
+	accounts       []*ServiceAccount
+	keys           []*SAKey
+	bindings       []*IAMBinding
+	folderBindings []*IAMBinding
+	orgBindings    []*IAMBinding
+	createdKey     []byte
+	listErr        error
+	createErr      error
+	deleteErr      error
+	listKeysErr    error
+	createKeyErr   error
+	deleteKeyErr   error
+	getPolicyErr   error
+	addBindErr     error
+	rmBindErr      error
+	testPerms      []string
+	testErr        error
 }
 
 func (m *mockClient) ListServiceAccounts(_ context.Context, _ string) ([]*ServiceAccount, error) {
@@ -59,6 +63,42 @@ func (m *mockClient) AddBinding(_ context.Context, _, _, _ string) error {
 
 func (m *mockClient) RemoveBinding(_ context.Context, _, _, _ string) error {
 	return m.rmBindErr
+}
+
+func (m *mockClient) GetFolderPolicy(_ context.Context, _ string) ([]*IAMBinding, error) {
+	return m.folderBindings, m.getPolicyErr
+}
+
+func (m *mockClient) AddFolderBinding(_ context.Context, _, _, _ string) error {
+	return m.addBindErr
+}
+
+func (m *mockClient) RemoveFolderBinding(_ context.Context, _, _, _ string) error {
+	return m.rmBindErr
+}
+
+func (m *mockClient) TestFolderPermissions(_ context.Context, _ string, _ []string) ([]string, error) {
+	return m.testPerms, m.testErr
+}
+
+func (m *mockClient) GetOrganizationPolicy(_ context.Context, _ string) ([]*IAMBinding, error) {
+	return m.orgBindings, m.getPolicyErr
+}
+
+func (m *mockClient) AddOrganizationBinding(_ context.Context, _, _, _ string) error {
+	return m.addBindErr
+}
+
+func (m *mockClient) RemoveOrganizationBinding(_ context.Context, _, _, _ string) error {
+	return m.rmBindErr
+}
+
+func (m *mockClient) TestOrganizationPermissions(_ context.Context, _ string, _ []string) ([]string, error) {
+	return m.testPerms, m.testErr
+}
+
+func (m *mockClient) TestProjectPermissions(_ context.Context, _ string, _ []string) ([]string, error) {
+	return m.testPerms, m.testErr
 }
 
 func TestMockListServiceAccounts(t *testing.T) {

@@ -46,11 +46,22 @@ type Client interface {
 	GetPolicy(ctx context.Context, project string) ([]*IAMBinding, error)
 	AddBinding(ctx context.Context, project, member, role string) error
 	RemoveBinding(ctx context.Context, project, member, role string) error
+	GetFolderPolicy(ctx context.Context, folder string) ([]*IAMBinding, error)
+	AddFolderBinding(ctx context.Context, folder, member, role string) error
+	RemoveFolderBinding(ctx context.Context, folder, member, role string) error
+	TestFolderPermissions(ctx context.Context, folder string, permissions []string) ([]string, error)
+	GetOrganizationPolicy(ctx context.Context, organization string) ([]*IAMBinding, error)
+	AddOrganizationBinding(ctx context.Context, organization, member, role string) error
+	RemoveOrganizationBinding(ctx context.Context, organization, member, role string) error
+	TestOrganizationPermissions(ctx context.Context, organization string, permissions []string) ([]string, error)
+	TestProjectPermissions(ctx context.Context, project string, permissions []string) ([]string, error)
 }
 
 type gcpClient struct {
 	iam *iamadmin.IamClient
 	rm  *resourcemanager.ProjectsClient
+	fd  *resourcemanager.FoldersClient
+	org *resourcemanager.OrganizationsClient
 }
 
 // NewClient creates a Client backed by the real GCP IAM API.
@@ -65,7 +76,17 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 		return nil, fmt.Errorf("create resource manager client: %w", err)
 	}
 
-	return &gcpClient{iam: ic, rm: rm}, nil
+	fd, err := resourcemanager.NewFoldersRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create folders client: %w", err)
+	}
+
+	org, err := resourcemanager.NewOrganizationsRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create organizations client: %w", err)
+	}
+
+	return &gcpClient{iam: ic, rm: rm, fd: fd, org: org}, nil
 }
 
 func (c *gcpClient) ListServiceAccounts(ctx context.Context, project string) ([]*ServiceAccount, error) {
@@ -150,13 +171,178 @@ func (c *gcpClient) DeleteKey(ctx context.Context, keyName string) error {
 }
 
 func (c *gcpClient) GetPolicy(ctx context.Context, project string) ([]*IAMBinding, error) {
-	policy, err := c.rm.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
-		Resource: "projects/" + project,
-	})
+	policy, err := c.getProjectPolicy(ctx, project)
 	if err != nil {
 		return nil, fmt.Errorf("get iam policy: %w", err)
 	}
+	return policyBindings(policy), nil
+}
 
+func (c *gcpClient) AddBinding(ctx context.Context, project, member, role string) error {
+	policy, err := c.getProjectPolicy(ctx, project)
+	if err != nil {
+		return fmt.Errorf("get policy: %w", err)
+	}
+	return c.setProjectPolicy(ctx, project, addBinding(policy, member, role))
+}
+
+func (c *gcpClient) RemoveBinding(ctx context.Context, project, member, role string) error {
+	policy, err := c.getProjectPolicy(ctx, project)
+	if err != nil {
+		return fmt.Errorf("get policy: %w", err)
+	}
+	return c.setProjectPolicy(ctx, project, removeBinding(policy, member, role))
+}
+
+func (c *gcpClient) GetFolderPolicy(ctx context.Context, folder string) ([]*IAMBinding, error) {
+	policy, err := c.getFolderPolicy(ctx, folder)
+	if err != nil {
+		return nil, fmt.Errorf("get folder iam policy: %w", err)
+	}
+	return policyBindings(policy), nil
+}
+
+func (c *gcpClient) AddFolderBinding(ctx context.Context, folder, member, role string) error {
+	policy, err := c.getFolderPolicy(ctx, folder)
+	if err != nil {
+		return fmt.Errorf("get folder policy: %w", err)
+	}
+	return c.setFolderPolicy(ctx, folder, addBinding(policy, member, role))
+}
+
+func (c *gcpClient) RemoveFolderBinding(ctx context.Context, folder, member, role string) error {
+	policy, err := c.getFolderPolicy(ctx, folder)
+	if err != nil {
+		return fmt.Errorf("get folder policy: %w", err)
+	}
+	return c.setFolderPolicy(ctx, folder, removeBinding(policy, member, role))
+}
+
+func (c *gcpClient) TestFolderPermissions(ctx context.Context, folder string, permissions []string) ([]string, error) {
+	resp, err := c.fd.TestIamPermissions(ctx, &iampb.TestIamPermissionsRequest{
+		Resource:    normalizeResource("folders", folder),
+		Permissions: permissions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("test folder permissions: %w", err)
+	}
+	return resp.GetPermissions(), nil
+}
+
+func (c *gcpClient) GetOrganizationPolicy(ctx context.Context, organization string) ([]*IAMBinding, error) {
+	policy, err := c.getOrganizationPolicy(ctx, organization)
+	if err != nil {
+		return nil, fmt.Errorf("get organization iam policy: %w", err)
+	}
+	return policyBindings(policy), nil
+}
+
+func (c *gcpClient) AddOrganizationBinding(ctx context.Context, organization, member, role string) error {
+	policy, err := c.getOrganizationPolicy(ctx, organization)
+	if err != nil {
+		return fmt.Errorf("get organization policy: %w", err)
+	}
+	return c.setOrganizationPolicy(ctx, organization, addBinding(policy, member, role))
+}
+
+func (c *gcpClient) RemoveOrganizationBinding(ctx context.Context, organization, member, role string) error {
+	policy, err := c.getOrganizationPolicy(ctx, organization)
+	if err != nil {
+		return fmt.Errorf("get organization policy: %w", err)
+	}
+	return c.setOrganizationPolicy(ctx, organization, removeBinding(policy, member, role))
+}
+
+func (c *gcpClient) TestOrganizationPermissions(ctx context.Context, organization string, permissions []string) ([]string, error) {
+	resp, err := c.org.TestIamPermissions(ctx, &iampb.TestIamPermissionsRequest{
+		Resource:    normalizeResource("organizations", organization),
+		Permissions: permissions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("test organization permissions: %w", err)
+	}
+	return resp.GetPermissions(), nil
+}
+
+func (c *gcpClient) TestProjectPermissions(ctx context.Context, project string, permissions []string) ([]string, error) {
+	resp, err := c.rm.TestIamPermissions(ctx, &iampb.TestIamPermissionsRequest{
+		Resource:    normalizeResource("projects", project),
+		Permissions: permissions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("test project permissions: %w", err)
+	}
+	return resp.GetPermissions(), nil
+}
+
+func (c *gcpClient) getProjectPolicy(ctx context.Context, project string) (*iampb.Policy, error) {
+	return c.rm.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
+		Resource: normalizeResource("projects", project),
+	})
+}
+
+func (c *gcpClient) setProjectPolicy(ctx context.Context, project string, policy *iampb.Policy) error {
+	_, err := c.rm.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{
+		Resource: normalizeResource("projects", project),
+		Policy:   policy,
+	})
+	if err != nil {
+		return fmt.Errorf("set project policy: %w", err)
+	}
+	return nil
+}
+
+func (c *gcpClient) getFolderPolicy(ctx context.Context, folder string) (*iampb.Policy, error) {
+	return c.fd.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
+		Resource: normalizeResource("folders", folder),
+	})
+}
+
+func (c *gcpClient) setFolderPolicy(ctx context.Context, folder string, policy *iampb.Policy) error {
+	_, err := c.fd.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{
+		Resource: normalizeResource("folders", folder),
+		Policy:   policy,
+	})
+	if err != nil {
+		return fmt.Errorf("set folder policy: %w", err)
+	}
+	return nil
+}
+
+func (c *gcpClient) getOrganizationPolicy(ctx context.Context, organization string) (*iampb.Policy, error) {
+	return c.org.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
+		Resource: normalizeResource("organizations", organization),
+	})
+}
+
+func (c *gcpClient) setOrganizationPolicy(ctx context.Context, organization string, policy *iampb.Policy) error {
+	_, err := c.org.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{
+		Resource: normalizeResource("organizations", organization),
+		Policy:   policy,
+	})
+	if err != nil {
+		return fmt.Errorf("set organization policy: %w", err)
+	}
+	return nil
+}
+
+func saFromProto(sa *adminpb.ServiceAccount) *ServiceAccount {
+	return &ServiceAccount{
+		Email:       sa.GetEmail(),
+		DisplayName: sa.GetDisplayName(),
+		UniqueID:    sa.GetUniqueId(),
+		Disabled:    sa.GetDisabled(),
+	}
+}
+
+func normalizeResource(kind, value string) string {
+	if len(value) >= len(kind)+1 && value[:len(kind)+1] == kind+"/" {
+		return value
+	}
+	return kind + "/" + value
+}
+
+func policyBindings(policy *iampb.Policy) []*IAMBinding {
 	var bindings []*IAMBinding
 	for _, b := range policy.GetBindings() {
 		bindings = append(bindings, &IAMBinding{
@@ -164,18 +350,10 @@ func (c *gcpClient) GetPolicy(ctx context.Context, project string) ([]*IAMBindin
 			Members: b.GetMembers(),
 		})
 	}
-	return bindings, nil
+	return bindings
 }
 
-func (c *gcpClient) AddBinding(ctx context.Context, project, member, role string) error {
-	policy, err := c.rm.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
-		Resource: "projects/" + project,
-	})
-	if err != nil {
-		return fmt.Errorf("get policy: %w", err)
-	}
-
-	// Find existing binding or create new one
+func addBinding(policy *iampb.Policy, member, role string) *iampb.Policy {
 	found := false
 	for _, b := range policy.GetBindings() {
 		if b.GetRole() == role {
@@ -190,25 +368,10 @@ func (c *gcpClient) AddBinding(ctx context.Context, project, member, role string
 			Members: []string{member},
 		})
 	}
-
-	_, err = c.rm.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{
-		Resource: "projects/" + project,
-		Policy:   policy,
-	})
-	if err != nil {
-		return fmt.Errorf("set policy: %w", err)
-	}
-	return nil
+	return policy
 }
 
-func (c *gcpClient) RemoveBinding(ctx context.Context, project, member, role string) error {
-	policy, err := c.rm.GetIamPolicy(ctx, &iampb.GetIamPolicyRequest{
-		Resource: "projects/" + project,
-	})
-	if err != nil {
-		return fmt.Errorf("get policy: %w", err)
-	}
-
+func removeBinding(policy *iampb.Policy, member, role string) *iampb.Policy {
 	for _, b := range policy.GetBindings() {
 		if b.GetRole() == role {
 			var filtered []string
@@ -221,22 +384,5 @@ func (c *gcpClient) RemoveBinding(ctx context.Context, project, member, role str
 			break
 		}
 	}
-
-	_, err = c.rm.SetIamPolicy(ctx, &iampb.SetIamPolicyRequest{
-		Resource: "projects/" + project,
-		Policy:   policy,
-	})
-	if err != nil {
-		return fmt.Errorf("set policy: %w", err)
-	}
-	return nil
-}
-
-func saFromProto(sa *adminpb.ServiceAccount) *ServiceAccount {
-	return &ServiceAccount{
-		Email:       sa.GetEmail(),
-		DisplayName: sa.GetDisplayName(),
-		UniqueID:    sa.GetUniqueId(),
-		Disabled:    sa.GetDisabled(),
-	}
+	return policy
 }

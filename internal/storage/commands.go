@@ -7,6 +7,7 @@ import (
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
 	"github.com/mosajjal/gcgo/internal/output"
+	"github.com/mosajjal/gcgo/internal/placeholder"
 	"github.com/spf13/cobra"
 )
 
@@ -20,9 +21,16 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	cmd.AddCommand(
 		newLsCommand(cfg, creds),
 		newCpCommand(cfg, creds),
+		newMvCommand(creds),
+		newRsyncCommand(cfg, creds),
+		newCatCommand(creds),
+		newSignURLCommand(creds),
 		newRmCommand(creds),
 		newMbCommand(cfg, creds),
 		newRbCommand(creds),
+		newIAMCommand(),
+		newLifecycleCommand(),
+		newRetentionCommand(),
 	)
 
 	return cmd
@@ -142,7 +150,9 @@ func newCpCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 					return err
 				}
 			case srcIsGCS && dstIsGCS:
-				return fmt.Errorf("GCS-to-GCS copy not yet implemented")
+				if err := client.Copy(ctx, srcBucket, srcPath, dstBucket, dstPath); err != nil {
+					return err
+				}
 			default:
 				return fmt.Errorf("at least one path must be a gs:// URI")
 			}
@@ -236,4 +246,39 @@ func newRbCommand(creds *auth.Credentials) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newIAMCommand() *cobra.Command {
+	const docsURL = "https://cloud.google.com/storage/docs/access-control/iam"
+	return placeholder.NewGroup(
+		"iam",
+		"Manage Cloud Storage IAM policies",
+		docsURL,
+		placeholder.NewCommand("get-policy", "Get a bucket IAM policy", docsURL),
+		placeholder.NewCommand("set-policy", "Set a bucket IAM policy", docsURL),
+		placeholder.NewCommand("test-permissions", "Test permissions against a bucket", docsURL),
+	)
+}
+
+func newLifecycleCommand() *cobra.Command {
+	const docsURL = "https://cloud.google.com/storage/docs/lifecycle"
+	return placeholder.NewGroup(
+		"lifecycle",
+		"Manage Cloud Storage lifecycle policies",
+		docsURL,
+		placeholder.NewCommand("describe", "Describe a bucket lifecycle policy", docsURL),
+		placeholder.NewCommand("update", "Update a bucket lifecycle policy", docsURL),
+	)
+}
+
+func newRetentionCommand() *cobra.Command {
+	const docsURL = "https://cloud.google.com/storage/docs/using-bucket-lock"
+	return placeholder.NewGroup(
+		"retention",
+		"Manage Cloud Storage retention policies",
+		docsURL,
+		placeholder.NewCommand("describe", "Describe a bucket retention policy", docsURL),
+		placeholder.NewCommand("update", "Update a bucket retention policy", docsURL),
+		placeholder.NewCommand("lock", "Lock a bucket retention policy", docsURL),
+	)
 }

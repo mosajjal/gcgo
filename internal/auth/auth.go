@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"cloud.google.com/go/auth/credentials"
+	gcauth "cloud.google.com/go/auth"
+	authcredentials "cloud.google.com/go/auth/credentials"
+	authidtoken "cloud.google.com/go/auth/credentials/idtoken"
+	authimpersonate "cloud.google.com/go/auth/credentials/impersonate"
 	"google.golang.org/api/option"
 )
 
@@ -18,7 +21,8 @@ const (
 
 // Credentials manages GCP authentication state.
 type Credentials struct {
-	credDir string
+	credDir           string
+	impersonateTarget string
 }
 
 // New creates a Credentials manager using the given config directory.
@@ -38,26 +42,40 @@ func DefaultCredDir() (string, error) {
 // ClientOption returns a google API client option for the active credentials.
 // Priority: stored service account key > ADC.
 func (c *Credentials) ClientOption(ctx context.Context) (option.ClientOption, error) {
-	keyPath := c.credPath()
-
-	if data, err := os.ReadFile(keyPath); err == nil { //nolint:gosec // path is from our own config dir, not user input
-		creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-			Scopes:          []string{scopePlatform},
-			CredentialsJSON: data,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("parse stored credentials: %w", err)
-		}
-		return option.WithAuthCredentials(creds), nil
-	}
-
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{scopePlatform},
-	})
+	creds, err := c.detectDefault(ctx, []string{scopePlatform})
 	if err != nil {
-		return nil, fmt.Errorf("find credentials: %w (run 'gcgo auth login' to authenticate)", err)
+		return nil, err
+	}
+	if target := c.impersonateTarget; target != "" {
+		creds, err = newImpersonatedAccessCredentials(creds, target, []string{scopePlatform})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return option.WithAuthCredentials(creds), nil
+}
+
+// AccessToken returns an OAuth2 access token using stored credentials or ADC.
+// If targetPrincipal is set, the token is generated via service account impersonation.
+func (c *Credentials) AccessToken(ctx context.Context, targetPrincipal string, scopes []string) (string, error) {
+	return c.accessTokenWithFactories(ctx, c.effectiveImpersonationTarget(targetPrincipal), scopes, c.detectDefault, newImpersonatedAccessCredentials)
+}
+
+// IdentityToken returns an ID token for the given audience. If targetPrincipal
+// is set, the token is generated via service account impersonation.
+func (c *Credentials) IdentityToken(ctx context.Context, audience, targetPrincipal string, includeEmail bool) (string, error) {
+	return c.identityTokenWithFactories(ctx, audience, c.effectiveImpersonationTarget(targetPrincipal), includeEmail, c.newIDTokenCredentials, newImpersonatedIDTokenCredentials)
+}
+
+// SetImpersonateTarget configures a service account email to impersonate for
+// client-backed commands that rely on ClientOption.
+func (c *Credentials) SetImpersonateTarget(target string) {
+	c.impersonateTarget = target
+}
+
+// ImpersonateTarget returns the currently configured global impersonation target.
+func (c *Credentials) ImpersonateTarget() string {
+	return c.impersonateTarget
 }
 
 // ActiveAccount returns the email of the active credential, if available.
@@ -162,4 +180,147 @@ func adcFilePath() string {
 		return ""
 	}
 	return filepath.Join(cfgDir, "gcloud", "application_default_credentials.json")
+}
+
+func (c *Credentials) effectiveImpersonationTarget(override string) string {
+	if override != "" {
+		return override
+	}
+	return c.impersonateTarget
+}
+
+func (c *Credentials) detectDefault(ctx context.Context, scopes []string) (*gcauth.Credentials, error) {
+	if len(scopes) == 0 {
+		scopes = []string{scopePlatform}
+	}
+
+	data, err := c.credentialsJSON()
+	if err == nil {
+		creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+			Scopes:          scopes,
+			CredentialsJSON: data,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("parse stored credentials: %w", err)
+		}
+		return creds, nil
+	}
+
+	creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: scopes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("find credentials: %w (run 'gcgo auth login' to authenticate)", err)
+	}
+	return creds, nil
+}
+
+func (c *Credentials) newIDTokenCredentials(audience string) (*gcauth.Credentials, error) {
+	data, err := c.credentialsJSON()
+	if err != nil {
+		data = nil
+	}
+
+	creds, err := authidtoken.NewCredentials(&authidtoken.Options{
+		Audience:        audience,
+		CredentialsJSON: data,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create id token credentials: %w", err)
+	}
+	return creds, nil
+}
+
+func (c *Credentials) credentialsJSON() ([]byte, error) {
+	data, err := os.ReadFile(c.credPath()) //nolint:gosec // path is from our own config dir
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func newImpersonatedAccessCredentials(base *gcauth.Credentials, targetPrincipal string, scopes []string) (*gcauth.Credentials, error) {
+	creds, err := authimpersonate.NewCredentials(&authimpersonate.CredentialsOptions{
+		TargetPrincipal: targetPrincipal,
+		Scopes:          scopes,
+		Credentials:     base,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create impersonated access token credentials: %w", err)
+	}
+	return creds, nil
+}
+
+func newImpersonatedIDTokenCredentials(base *gcauth.Credentials, audience, targetPrincipal string, includeEmail bool) (*gcauth.Credentials, error) {
+	creds, err := authimpersonate.NewIDTokenCredentials(&authimpersonate.IDTokenOptions{
+		Audience:        audience,
+		TargetPrincipal: targetPrincipal,
+		IncludeEmail:    includeEmail,
+		Credentials:     base,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create impersonated id token credentials: %w", err)
+	}
+	return creds, nil
+}
+
+func (c *Credentials) accessTokenWithFactories(
+	ctx context.Context,
+	targetPrincipal string,
+	scopes []string,
+	detect func(context.Context, []string) (*gcauth.Credentials, error),
+	impersonate func(*gcauth.Credentials, string, []string) (*gcauth.Credentials, error),
+) (string, error) {
+	if len(scopes) == 0 {
+		scopes = []string{scopePlatform}
+	}
+
+	creds, err := detect(ctx, scopes)
+	if err != nil {
+		return "", err
+	}
+	if targetPrincipal != "" {
+		creds, err = impersonate(creds, targetPrincipal, scopes)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	token, err := creds.Token(ctx)
+	if err != nil {
+		return "", fmt.Errorf("fetch access token: %w", err)
+	}
+	return token.Value, nil
+}
+
+func (c *Credentials) identityTokenWithFactories(
+	ctx context.Context,
+	audience, targetPrincipal string,
+	includeEmail bool,
+	direct func(string) (*gcauth.Credentials, error),
+	impersonate func(*gcauth.Credentials, string, string, bool) (*gcauth.Credentials, error),
+) (string, error) {
+	var (
+		creds *gcauth.Credentials
+		err   error
+	)
+
+	if targetPrincipal != "" {
+		baseCreds, err := c.detectDefault(ctx, []string{scopePlatform})
+		if err != nil {
+			return "", err
+		}
+		creds, err = impersonate(baseCreds, audience, targetPrincipal, includeEmail)
+	} else {
+		creds, err = direct(audience)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	token, err := creds.Token(ctx)
+	if err != nil {
+		return "", fmt.Errorf("fetch id token: %w", err)
+	}
+	return token.Value, nil
 }

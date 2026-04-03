@@ -5,3 +5,7 @@ coverage.out
 *.test
 .envrc
 .env
+.claude/
+.codex/
+.codex
+gcgo
