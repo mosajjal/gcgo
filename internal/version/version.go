@@ -3,6 +3,8 @@ package version
 import (
 	"runtime"
 	"runtime/debug"
+	"strings"
+	"time"
 )
 
 var (
@@ -44,6 +46,16 @@ func resolvedMetadata(bi *debug.BuildInfo, ok bool) (string, string, string) {
 			buildTime = value
 		}
 	}
+	if (gitCommit == "" || gitCommit == "none") || (buildTime == "" || buildTime == "unknown") {
+		if pseudoCommit, pseudoBuildTime, found := pseudoVersionMetadata(version); found {
+			if gitCommit == "" || gitCommit == "none" {
+				gitCommit = pseudoCommit
+			}
+			if buildTime == "" || buildTime == "unknown" {
+				buildTime = pseudoBuildTime
+			}
+		}
+	}
 
 	return version, gitCommit, buildTime
 }
@@ -58,4 +70,25 @@ func buildSetting(bi *debug.BuildInfo, ok bool, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func pseudoVersionMetadata(version string) (string, string, bool) {
+	version = strings.TrimSuffix(version, "+incompatible")
+	parts := strings.Split(version, "-")
+	if len(parts) < 3 {
+		return "", "", false
+	}
+
+	timestamp := parts[len(parts)-2]
+	revision := parts[len(parts)-1]
+	if len(timestamp) != 14 || revision == "" {
+		return "", "", false
+	}
+
+	builtAt, err := time.Parse("20060102150405", timestamp)
+	if err != nil {
+		return "", "", false
+	}
+
+	return revision, builtAt.UTC().Format(time.RFC3339), true
 }

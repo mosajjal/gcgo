@@ -47,3 +47,18 @@ func TestResolvedMetadataFallsBackToBuildInfo(t *testing.T) {
 		t.Fatalf("unexpected metadata: version=%q gitCommit=%q buildTime=%q", version, gitCommit, buildTime)
 	}
 }
+
+func TestResolvedMetadataFallsBackToPseudoVersion(t *testing.T) {
+	bi := &debug.BuildInfo{
+		Main: debug.Module{Version: "v0.0.0-20260403033925-edaee4156459"},
+	}
+
+	Version = "dev"
+	GitCommit = "none"
+	BuildTime = "unknown"
+
+	version, gitCommit, buildTime := resolvedMetadata(bi, true)
+	if version != "v0.0.0-20260403033925-edaee4156459" || gitCommit != "edaee4156459" || buildTime != "2026-04-03T03:39:25Z" {
+		t.Fatalf("unexpected metadata: version=%q gitCommit=%q buildTime=%q", version, gitCommit, buildTime)
+	}
+}
