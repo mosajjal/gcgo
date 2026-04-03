@@ -8,6 +8,14 @@ A fast, single-binary Google Cloud CLI written in Go. Covers the commands people
 
 ```sh
 go install github.com/mosajjal/gcgo/cmd/gcgo@latest
+gcgo version
+```
+
+That installs the latest tagged or default branch version into `$(go env GOPATH)/bin` or `$(go env GOBIN)`. `gcgo version` prints the binary version, commit ID, and build date. You can also install a specific release or revision:
+
+```sh
+go install github.com/mosajjal/gcgo/cmd/gcgo@v0.1.0
+go install github.com/mosajjal/gcgo/cmd/gcgo@1cd6947
 ```
 
 ### From releases
@@ -21,6 +29,7 @@ git clone https://github.com/mosajjal/gcgo.git
 cd gcgo
 make build
 # binary is at ./bin/gcgo
+./bin/gcgo version
 ```
 
 ## Auth
