@@ -21,6 +21,20 @@ make build
 
 gcgo delegates entirely to Application Default Credentials (ADC). Run `gcgo auth login` to authenticate interactively, or set `GOOGLE_APPLICATION_CREDENTIALS` to a service account key file. Service account impersonation is supported via `--impersonate-service-account` on any command.
 
+## Environment Variables
+
+- `GCGO_CONFIG_DIR` — override the directory used for config (`properties.toml`) and credentials (`credentials.json`). Useful in CI to point at a mounted secret directory instead of `~/.config/gcgo/`.
+- `GCGO_CREDENTIALS_HELPER` — path (and optional args) to an external credential helper binary. When set, gcgo delegates all credential storage and retrieval to it instead of using `credentials.json`. The helper is called with a verb:
+  - `helper get` → helper writes credentials JSON to stdout
+  - `helper store` → gcgo writes credentials JSON to helper's stdin
+  - `helper erase` → helper removes the stored credential
+  - Helper exits 0 on success, non-zero on failure (stderr is shown to the user)
+  - Example: `GCGO_CREDENTIALS_HELPER="age-credential-helper --key ~/.ssh/id_ed25519"`
+- `GCGO_PROJECT` — default GCP project (same as `gcgo config set project`)
+- `GCGO_REGION` — default region
+- `GCGO_ZONE` — default zone
+- `GOOGLE_APPLICATION_CREDENTIALS` — standard ADC env var, honoured by gcgo
+
 ## Global Flags
 
 These flags work on every command:

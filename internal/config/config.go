@@ -151,6 +151,9 @@ func (c *Config) All() map[string]string {
 }
 
 func configPath() (string, error) {
+	if dir := os.Getenv("GCGO_CONFIG_DIR"); dir != "" {
+		return filepath.Join(dir, fileName), nil
+	}
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err

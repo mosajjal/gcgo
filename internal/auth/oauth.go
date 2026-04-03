@@ -166,11 +166,8 @@ func (c *Credentials) BrowserLogin(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("marshal credentials: %w", err)
 	}
 
-	if err := os.MkdirAll(c.credDir, 0o700); err != nil {
-		return "", fmt.Errorf("create credential dir: %w", err)
-	}
-	if err := os.WriteFile(c.credPath(), data, 0o600); err != nil {
-		return "", fmt.Errorf("store credentials: %w", err)
+	if err := c.storeCredentials(data); err != nil {
+		return "", err
 	}
 
 	return email, nil

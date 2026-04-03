@@ -1,11 +1,15 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	gcauth "cloud.google.com/go/auth"
 	authcredentials "cloud.google.com/go/auth/credentials"
@@ -31,7 +35,11 @@ func New(credDir string) *Credentials {
 }
 
 // DefaultCredDir returns the default credential storage directory.
+// Respects GCGO_CONFIG_DIR if set.
 func DefaultCredDir() (string, error) {
+	if dir := os.Getenv("GCGO_CONFIG_DIR"); dir != "" {
+		return dir, nil
+	}
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)
@@ -113,7 +121,8 @@ func (c *Credentials) ActiveAccount() (string, error) {
 	return "(unknown credential type)", nil
 }
 
-// StoreServiceAccountKey copies a service account JSON key file into the cred dir.
+// StoreServiceAccountKey copies a service account JSON key file into the cred dir
+// (or forwards it to GCGO_CREDENTIALS_HELPER store if set).
 func (c *Credentials) StoreServiceAccountKey(keyFile string) error {
 	// Check file permissions — warn if too open
 	info, err := os.Stat(keyFile)
@@ -140,22 +149,30 @@ func (c *Credentials) StoreServiceAccountKey(keyFile string) error {
 		return fmt.Errorf("key file type is %q, expected \"service_account\"", check.Type)
 	}
 
+	return c.storeCredentials(data)
+}
+
+func (c *Credentials) storeCredentials(data []byte) error {
+	if helper := os.Getenv("GCGO_CREDENTIALS_HELPER"); helper != "" {
+		_, err := runCredentialHelper(helper, "store", data)
+		return err
+	}
 	if err := os.MkdirAll(c.credDir, 0o700); err != nil {
 		return fmt.Errorf("create credential dir: %w", err)
 	}
-
-	dst := c.credPath()
-	if err := os.WriteFile(dst, data, 0o600); err != nil {
+	if err := os.WriteFile(c.credPath(), data, 0o600); err != nil {
 		return fmt.Errorf("store credentials: %w", err)
 	}
-
 	return nil
 }
 
 // Revoke removes stored credentials.
 func (c *Credentials) Revoke() error {
-	dst := c.credPath()
-	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+	if helper := os.Getenv("GCGO_CREDENTIALS_HELPER"); helper != "" {
+		_, err := runCredentialHelper(helper, "erase", nil)
+		return err
+	}
+	if err := os.Remove(c.credPath()); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove credentials: %w", err)
 	}
 	return nil
@@ -232,11 +249,35 @@ func (c *Credentials) newIDTokenCredentials(audience string) (*gcauth.Credential
 }
 
 func (c *Credentials) credentialsJSON() ([]byte, error) {
+	if helper := os.Getenv("GCGO_CREDENTIALS_HELPER"); helper != "" {
+		return runCredentialHelper(helper, "get", nil)
+	}
 	data, err := os.ReadFile(c.credPath()) //nolint:gosec // path is from our own config dir
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
+}
+
+// runCredentialHelper executes the named helper binary with the given verb
+// (get / store / erase). For "store", input is written to the helper's stdin.
+// For "get", the helper's stdout is returned.
+func runCredentialHelper(helper, verb string, input []byte) ([]byte, error) {
+	parts := strings.Fields(helper)
+	args := append(parts[1:], verb) //nolint:gocritic // intentional append to slice literal
+	cmd := exec.Command(parts[0], args...)  //nolint:gosec // user controls helper via env var
+	if input != nil {
+		cmd.Stdin = bytes.NewReader(input)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if ok := errors.As(err, &exitErr); ok && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("credential helper %s: %s", verb, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return nil, fmt.Errorf("credential helper %s: %w", verb, err)
+	}
+	return out, nil
 }
 
 func newImpersonatedAccessCredentials(base *gcauth.Credentials, targetPrincipal string, scopes []string) (*gcauth.Credentials, error) {
