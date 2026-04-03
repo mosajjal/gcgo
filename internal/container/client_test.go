@@ -23,6 +23,7 @@ type mockClient struct {
 	deleteErr  error
 	updateErr  error
 	upgradeErr error
+	resizeErr  error
 	opErr      error
 }
 
@@ -55,6 +56,10 @@ func (m *mockClient) UpdateCluster(_ context.Context, _, _, _ string, _ *UpdateC
 
 func (m *mockClient) UpgradeCluster(_ context.Context, _, _, _ string, _ *UpgradeClusterRequest) error {
 	return m.upgradeErr
+}
+
+func (m *mockClient) ResizeCluster(_ context.Context, _, _, _, _ string, _ int32) error {
+	return m.resizeErr
 }
 
 func (m *mockClient) ListOperations(_ context.Context, _, _ string) ([]*Operation, error) {

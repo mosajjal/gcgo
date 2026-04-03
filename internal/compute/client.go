@@ -14,12 +14,13 @@ import (
 
 // Instance holds the fields we display.
 type Instance struct {
-	Name        string `json:"name"`
-	Zone        string `json:"zone"`
-	Status      string `json:"status"`
-	MachineType string `json:"machine_type"`
-	InternalIP  string `json:"internal_ip"`
-	ExternalIP  string `json:"external_ip"`
+	Name        string   `json:"name"`
+	Zone        string   `json:"zone"`
+	Status      string   `json:"status"`
+	MachineType string   `json:"machine_type"`
+	InternalIP  string   `json:"internal_ip"`
+	ExternalIP  string   `json:"external_ip"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // FirewallRule holds firewall rule fields.
@@ -161,6 +162,20 @@ type Client interface {
 	GetUnmanagedInstanceGroup(ctx context.Context, project, zone, name string) (*UnmanagedInstanceGroup, error)
 	CreateUnmanagedInstanceGroup(ctx context.Context, project, zone string, req *CreateUnmanagedInstanceGroupRequest) error
 	DeleteUnmanagedInstanceGroup(ctx context.Context, project, zone, name string) error
+	SetTags(ctx context.Context, project, zone, instance string, tags []string) error
+	SetMachineType(ctx context.Context, project, zone, instance, machineType string) error
+	AttachDisk(ctx context.Context, project, zone, instance, diskName string, readOnly bool) error
+	DetachDisk(ctx context.Context, project, zone, instance, deviceName string) error
+	ListSSLCertificates(ctx context.Context, project string) ([]*SSLCertificate, error)
+	GetSSLCertificate(ctx context.Context, project, name string) (*SSLCertificate, error)
+	CreateSSLCertificate(ctx context.Context, project string, req *CreateSSLCertificateRequest) error
+	DeleteSSLCertificate(ctx context.Context, project, name string) error
+	ListSecurityPolicies(ctx context.Context, project string) ([]*SecurityPolicy, error)
+	GetSecurityPolicy(ctx context.Context, project, name string) (*SecurityPolicy, error)
+	CreateSecurityPolicy(ctx context.Context, project string, req *CreateSecurityPolicyRequest) error
+	DeleteSecurityPolicy(ctx context.Context, project, name string) error
+	AddSecurityPolicyRule(ctx context.Context, project, policy string, rule *SecurityPolicyRuleRequest) error
+	RemoveSecurityPolicyRule(ctx context.Context, project, policy string, priority int32) error
 }
 
 // CreateInstanceRequest holds parameters for instance creation.
@@ -255,17 +270,69 @@ type CreateUnmanagedInstanceGroupRequest struct {
 	Description string
 }
 
+// SSLCertificate holds SSL certificate fields.
+type SSLCertificate struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Status      string   `json:"status,omitempty"`
+	Domains     []string `json:"domains,omitempty"`
+	Description string   `json:"description,omitempty"`
+}
+
+// CreateSSLCertificateRequest holds parameters for SSL certificate creation.
+type CreateSSLCertificateRequest struct {
+	Name        string
+	Domains     []string // managed cert
+	CertFile    string   // self-managed: path to PEM cert
+	KeyFile     string   // self-managed: path to PEM key
+	Description string
+}
+
+// SecurityPolicy holds security policy fields.
+type SecurityPolicy struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Rules       int    `json:"rules"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// SecurityPolicyRule holds security policy rule fields.
+type SecurityPolicyRule struct {
+	Priority    int32    `json:"priority"`
+	Action      string   `json:"action"`
+	Description string   `json:"description,omitempty"`
+	SrcIPRanges []string `json:"src_ip_ranges,omitempty"`
+	Preview     bool     `json:"preview"`
+}
+
+// CreateSecurityPolicyRequest holds parameters for security policy creation.
+type CreateSecurityPolicyRequest struct {
+	Name        string
+	Description string
+}
+
+// SecurityPolicyRuleRequest holds parameters for adding a security policy rule.
+type SecurityPolicyRuleRequest struct {
+	Priority    int32
+	Action      string
+	Description string
+	SrcIPRanges []string
+	Preview     bool
+}
+
 type gcpClient struct {
-	instances              *compute.InstancesClient
-	firewalls              *compute.FirewallsClient
-	disks                  *compute.DisksClient
-	snapshots              *compute.SnapshotsClient
-	instanceTemplates      *compute.InstanceTemplatesClient
-	instanceGroups         *compute.InstanceGroupManagersClient
-	autoscalers            *compute.AutoscalersClient
-	images                 *compute.ImagesClient
-	vpnTunnels             *compute.VpnTunnelsClient
+	instances               *compute.InstancesClient
+	firewalls               *compute.FirewallsClient
+	disks                   *compute.DisksClient
+	snapshots               *compute.SnapshotsClient
+	instanceTemplates       *compute.InstanceTemplatesClient
+	instanceGroups          *compute.InstanceGroupManagersClient
+	autoscalers             *compute.AutoscalersClient
+	images                  *compute.ImagesClient
+	vpnTunnels              *compute.VpnTunnelsClient
 	unmanagedInstanceGroups *compute.InstanceGroupsClient
+	sslCertificates         *compute.SslCertificatesClient
+	securityPolicies        *compute.SecurityPoliciesClient
 }
 
 // NewClient creates a Client backed by the real GCP Compute API.
@@ -311,6 +378,14 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create instance groups client: %w", err)
 	}
+	sslc, err := compute.NewSslCertificatesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create ssl certificates client: %w", err)
+	}
+	spc, err := compute.NewSecurityPoliciesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create security policies client: %w", err)
+	}
 
 	return &gcpClient{
 		instances:               ic,
@@ -323,6 +398,8 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 		images:                  imgc,
 		vpnTunnels:              vpnc,
 		unmanagedInstanceGroups: uigc,
+		sslCertificates:         sslc,
+		securityPolicies:        spc,
 	}, nil
 }
 
@@ -653,6 +730,7 @@ func instanceFromProto(inst *computepb.Instance) *Instance {
 		Zone:        inst.GetZone(),
 		Status:      inst.GetStatus(),
 		MachineType: inst.GetMachineType(),
+		Tags:        inst.GetTags().GetItems(),
 	}
 
 	for _, ni := range inst.GetNetworkInterfaces() {
@@ -737,4 +815,80 @@ func strPtrOrNil(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func (c *gcpClient) SetTags(ctx context.Context, project, zone, instance string, tags []string) error {
+	// Fetch the instance first to get the current tag fingerprint.
+	inst, err := c.instances.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+	})
+	if err != nil {
+		return fmt.Errorf("get instance %s for set-tags: %w", instance, err)
+	}
+	fingerprint := inst.GetTags().GetFingerprint()
+	op, err := c.instances.SetTags(ctx, &computepb.SetTagsInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+		TagsResource: &computepb.Tags{
+			Items:       tags,
+			Fingerprint: &fingerprint,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("set tags on instance %s: %w", instance, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) SetMachineType(ctx context.Context, project, zone, instance, machineType string) error {
+	machineTypeURL := fmt.Sprintf("zones/%s/machineTypes/%s", zone, machineType)
+	op, err := c.instances.SetMachineType(ctx, &computepb.SetMachineTypeInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+		InstancesSetMachineTypeRequestResource: &computepb.InstancesSetMachineTypeRequest{
+			MachineType: &machineTypeURL,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("set machine type on instance %s: %w", instance, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) AttachDisk(ctx context.Context, project, zone, instance, diskName string, readOnly bool) error {
+	source := fmt.Sprintf("zones/%s/disks/%s", zone, diskName)
+	mode := "READ_WRITE"
+	if readOnly {
+		mode = "READ_ONLY"
+	}
+	op, err := c.instances.AttachDisk(ctx, &computepb.AttachDiskInstanceRequest{
+		Project:  project,
+		Zone:     zone,
+		Instance: instance,
+		AttachedDiskResource: &computepb.AttachedDisk{
+			Source: &source,
+			Mode:   &mode,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("attach disk %s to instance %s: %w", diskName, instance, err)
+	}
+	return op.Wait(ctx)
+}
+
+func (c *gcpClient) DetachDisk(ctx context.Context, project, zone, instance, deviceName string) error {
+	op, err := c.instances.DetachDisk(ctx, &computepb.DetachDiskInstanceRequest{
+		Project:    project,
+		Zone:       zone,
+		Instance:   instance,
+		DeviceName: deviceName,
+	})
+	if err != nil {
+		return fmt.Errorf("detach disk %s from instance %s: %w", deviceName, instance, err)
+	}
+	return op.Wait(ctx)
 }

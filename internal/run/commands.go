@@ -582,6 +582,7 @@ func newRevisionsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Com
 	cmd.AddCommand(
 		newRevisionsListCommand(cfg, creds),
 		newRevisionsDescribeCommand(cfg, creds),
+		newRevisionsDeleteCommand(cfg, creds),
 	)
 
 	return cmd
@@ -674,6 +675,42 @@ func newRevisionsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *c
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
 
+	return cmd
+}
+
+func newRevisionsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var region string
+
+	cmd := &cobra.Command{
+		Use:   "delete REVISION",
+		Short: "Delete a Cloud Run revision",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if region == "" {
+				region = cfg.Region()
+			}
+			if region == "" {
+				return fmt.Errorf("--region is required (or set region in config)")
+			}
+
+			ctx := context.Background()
+			client, err := runClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.DeleteRevision(ctx, project, region, args[0]); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted revision %s.\n", args[0])
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&region, "region", "", "Region")
 	return cmd
 }
 

@@ -261,6 +261,62 @@ func (m *mockClient) DeleteUnmanagedInstanceGroup(_ context.Context, _, _, _ str
 	return m.deleteErr
 }
 
+func (m *mockClient) SetTags(_ context.Context, _, _, _ string, _ []string) error {
+	return nil
+}
+
+func (m *mockClient) SetMachineType(_ context.Context, _, _, _, _ string) error {
+	return nil
+}
+
+func (m *mockClient) AttachDisk(_ context.Context, _, _, _, _ string, _ bool) error {
+	return nil
+}
+
+func (m *mockClient) DetachDisk(_ context.Context, _, _, _, _ string) error {
+	return nil
+}
+
+func (m *mockClient) ListSSLCertificates(_ context.Context, _ string) ([]*SSLCertificate, error) {
+	return nil, nil
+}
+
+func (m *mockClient) GetSSLCertificate(_ context.Context, _, _ string) (*SSLCertificate, error) {
+	return nil, nil
+}
+
+func (m *mockClient) CreateSSLCertificate(_ context.Context, _ string, _ *CreateSSLCertificateRequest) error {
+	return nil
+}
+
+func (m *mockClient) DeleteSSLCertificate(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (m *mockClient) ListSecurityPolicies(_ context.Context, _ string) ([]*SecurityPolicy, error) {
+	return nil, nil
+}
+
+func (m *mockClient) GetSecurityPolicy(_ context.Context, _, _ string) (*SecurityPolicy, error) {
+	return nil, nil
+}
+
+func (m *mockClient) CreateSecurityPolicy(_ context.Context, _ string, _ *CreateSecurityPolicyRequest) error {
+	return nil
+}
+
+func (m *mockClient) DeleteSecurityPolicy(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (m *mockClient) AddSecurityPolicyRule(_ context.Context, _, _ string, _ *SecurityPolicyRuleRequest) error {
+	return nil
+}
+
+func (m *mockClient) RemoveSecurityPolicyRule(_ context.Context, _, _ string, _ int32) error {
+	return nil
+}
+
 func TestMockListInstances(t *testing.T) {
 	mock := &mockClient{
 		instances: []*Instance{

@@ -22,11 +22,14 @@ type mockClient struct {
 	publishErr     error
 	publishID      string
 
-	listSubsErr  error
-	getSubErr    error
-	createSubErr error
-	deleteSubErr error
-	pullErr      error
+	listSubsErr      error
+	getSubErr        error
+	createSubErr     error
+	deleteSubErr     error
+	pullErr          error
+	ackErr           error
+	modifyAckErr     error
+	seekErr          error
 
 	listSchemasErr  error
 	getSchemaErr    error
@@ -98,6 +101,18 @@ func (m *mockClient) Pull(_ context.Context, _, _ string, _ int) ([]*ReceivedMes
 		return nil, m.pullErr
 	}
 	return m.msgs, nil
+}
+
+func (m *mockClient) AcknowledgeMessages(_ context.Context, _, _ string, _ []string) error {
+	return m.ackErr
+}
+
+func (m *mockClient) ModifyAckDeadline(_ context.Context, _, _ string, _ []string, _ int32) error {
+	return m.modifyAckErr
+}
+
+func (m *mockClient) SeekSubscription(_ context.Context, _, _ string, _ *SeekRequest) error {
+	return m.seekErr
 }
 
 func (m *mockClient) ListSchemas(_ context.Context, _ string) ([]*Schema, error) {

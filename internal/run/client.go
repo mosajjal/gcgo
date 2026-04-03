@@ -53,6 +53,7 @@ type Client interface {
 	DeleteService(ctx context.Context, project, region, name string) error
 	ListRevisions(ctx context.Context, project, region, service string) ([]*Revision, error)
 	GetRevision(ctx context.Context, project, region, name string) (*Revision, error)
+	DeleteRevision(ctx context.Context, project, region, revision string) error
 	UpdateTraffic(ctx context.Context, project, region, service string, req *UpdateTrafficRequest) (*Service, error)
 	GetServicePolicy(ctx context.Context, project, region, service string) (*iampb.Policy, error)
 	SetServicePolicy(ctx context.Context, project, region, service string, policy *iampb.Policy) (*iampb.Policy, error)
@@ -246,6 +247,19 @@ func (c *gcpClient) GetRevision(ctx context.Context, project, region, name strin
 		return nil, fmt.Errorf("get revision %s: %w", name, err)
 	}
 	return revisionFromProto(rev), nil
+}
+
+func (c *gcpClient) DeleteRevision(ctx context.Context, project, region, revision string) error {
+	op, err := c.revisions.DeleteRevision(ctx, &runpb.DeleteRevisionRequest{
+		Name: fmt.Sprintf("projects/%s/locations/%s/revisions/%s", project, region, revision),
+	})
+	if err != nil {
+		return fmt.Errorf("delete revision %s: %w", revision, err)
+	}
+	if _, err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait for delete revision %s: %w", revision, err)
+	}
+	return nil
 }
 
 func (c *gcpClient) UpdateTraffic(ctx context.Context, project, region, service string, req *UpdateTrafficRequest) (*Service, error) {

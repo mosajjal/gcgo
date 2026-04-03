@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	psapiv1 "cloud.google.com/go/pubsub/apiv1"
+	"cloud.google.com/go/pubsub/apiv1/pubsubpb"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	pubsubapi "google.golang.org/api/pubsub/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Topic holds Pub/Sub topic fields.
@@ -39,6 +42,12 @@ type ReceivedMessage struct {
 	PublishTime string            `json:"publish_time"`
 }
 
+// SeekRequest holds the target for a subscription seek operation.
+type SeekRequest struct {
+	Time     time.Time // zero if not set
+	Snapshot string    // empty if not set
+}
+
 // Client defines Pub/Sub operations.
 type Client interface {
 	ListTopics(ctx context.Context, project string) ([]*Topic, error)
@@ -52,6 +61,9 @@ type Client interface {
 	CreateSubscription(ctx context.Context, project, subID, topicID string, ackDeadline int) (*Subscription, error)
 	DeleteSubscription(ctx context.Context, project, subID string) error
 	Pull(ctx context.Context, project, subID string, maxMessages int) ([]*ReceivedMessage, error)
+	AcknowledgeMessages(ctx context.Context, project, subscription string, ackIDs []string) error
+	ModifyAckDeadline(ctx context.Context, project, subscription string, ackIDs []string, deadlineSeconds int32) error
+	SeekSubscription(ctx context.Context, project, subscription string, req *SeekRequest) error
 
 	ListSchemas(ctx context.Context, project string) ([]*Schema, error)
 	GetSchema(ctx context.Context, project, schemaID string) (*Schema, error)
@@ -60,9 +72,10 @@ type Client interface {
 }
 
 type gcpClient struct {
-	newClientFn     func(ctx context.Context, project string, opts ...option.ClientOption) (*pubsub.Client, error)
-	newRESTClientFn func(ctx context.Context, opts ...option.ClientOption) (*pubsubapi.Service, error)
-	opts            []option.ClientOption
+	newClientFn        func(ctx context.Context, project string, opts ...option.ClientOption) (*pubsub.Client, error)
+	newRESTClientFn    func(ctx context.Context, opts ...option.ClientOption) (*pubsubapi.Service, error)
+	newSubscriberFn    func(ctx context.Context, opts ...option.ClientOption) (*psapiv1.SubscriberClient, error)
+	opts               []option.ClientOption
 }
 
 // NewClient creates a Client backed by the real Pub/Sub API.
@@ -70,6 +83,7 @@ func NewClient(_ context.Context, opts ...option.ClientOption) (Client, error) {
 	return &gcpClient{
 		newClientFn:     pubsub.NewClient,
 		newRESTClientFn: pubsubapi.NewService,
+		newSubscriberFn: psapiv1.NewSubscriberClient,
 		opts:            opts,
 	}, nil
 }
@@ -88,6 +102,14 @@ func (c *gcpClient) restClient(ctx context.Context) (*pubsubapi.Service, error) 
 		return nil, fmt.Errorf("create pubsub schema client: %w", err)
 	}
 	return svc, nil
+}
+
+func (c *gcpClient) subscriberClient(ctx context.Context) (*psapiv1.SubscriberClient, error) {
+	sc, err := c.newSubscriberFn(ctx, c.opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create pubsub subscriber client: %w", err)
+	}
+	return sc, nil
 }
 
 func (c *gcpClient) ListTopics(ctx context.Context, project string) ([]*Topic, error) {
@@ -309,6 +331,64 @@ func (c *gcpClient) Pull(ctx context.Context, project, subID string, maxMessages
 		return nil, fmt.Errorf("pull from subscription %s: %w", subID, err)
 	}
 	return msgs, nil
+}
+
+func (c *gcpClient) AcknowledgeMessages(ctx context.Context, project, subscription string, ackIDs []string) error {
+	sc, err := c.subscriberClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer sc.Close()
+
+	err = sc.Acknowledge(ctx, &pubsubpb.AcknowledgeRequest{
+		Subscription: fmt.Sprintf("projects/%s/subscriptions/%s", project, subscription),
+		AckIds:       ackIDs,
+	})
+	if err != nil {
+		return fmt.Errorf("acknowledge messages: %w", err)
+	}
+	return nil
+}
+
+func (c *gcpClient) ModifyAckDeadline(ctx context.Context, project, subscription string, ackIDs []string, deadlineSeconds int32) error {
+	sc, err := c.subscriberClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer sc.Close()
+
+	err = sc.ModifyAckDeadline(ctx, &pubsubpb.ModifyAckDeadlineRequest{
+		Subscription:       fmt.Sprintf("projects/%s/subscriptions/%s", project, subscription),
+		AckIds:             ackIDs,
+		AckDeadlineSeconds: deadlineSeconds,
+	})
+	if err != nil {
+		return fmt.Errorf("modify ack deadline: %w", err)
+	}
+	return nil
+}
+
+func (c *gcpClient) SeekSubscription(ctx context.Context, project, subscription string, req *SeekRequest) error {
+	sc, err := c.subscriberClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer sc.Close()
+
+	fullName := fmt.Sprintf("projects/%s/subscriptions/%s", project, subscription)
+	sreq := &pubsubpb.SeekRequest{
+		Subscription: fullName,
+	}
+	if !req.Time.IsZero() {
+		sreq.Target = &pubsubpb.SeekRequest_Time{Time: timestamppb.New(req.Time)}
+	} else if req.Snapshot != "" {
+		sreq.Target = &pubsubpb.SeekRequest_Snapshot{Snapshot: req.Snapshot}
+	}
+
+	if _, err = sc.Seek(ctx, sreq); err != nil {
+		return fmt.Errorf("seek subscription: %w", err)
+	}
+	return nil
 }
 
 func (c *gcpClient) ListSchemas(ctx context.Context, project string) ([]*Schema, error) {

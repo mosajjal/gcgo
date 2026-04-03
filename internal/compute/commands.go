@@ -43,6 +43,8 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		newTargetSslProxiesCommand(cfg, creds),
 		newImagesCommand(cfg, creds),
 		newVPNTunnelsCommand(cfg, creds),
+		newSSLCertificatesCommand(cfg, creds),
+		newSecurityPoliciesCommand(cfg, creds),
 		newSSHCommand(cfg, creds),
 		newSCPCommand(cfg, creds),
 	)
@@ -358,9 +360,239 @@ func newInstancesCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Com
 		newInstancesStartCommand(cfg, creds),
 		newInstancesStopCommand(cfg, creds),
 		newInstancesResetCommand(cfg, creds),
+		newInstancesAddTagsCommand(cfg, creds),
+		newInstancesRemoveTagsCommand(cfg, creds),
+		newInstancesSetMachineTypeCommand(cfg, creds),
+		newInstancesAttachDiskCommand(cfg, creds),
+		newInstancesDetachDiskCommand(cfg, creds),
 	)
 
 	return cmd
+}
+
+func newInstancesAddTagsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var tags []string
+
+	cmd := &cobra.Command{
+		Use:   "add-tags INSTANCE",
+		Short: "Add network tags to a VM instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			existing, err := instanceTags(ctx, client, project, zone, args[0])
+			if err != nil {
+				return err
+			}
+			merged := mergeTags(existing, tags)
+			if err := client.SetTags(ctx, project, zone, args[0], merged); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated tags on instance %q.\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringSliceVar(&tags, "tags", nil, "Tags to add")
+	return cmd
+}
+
+func newInstancesRemoveTagsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var tags []string
+
+	cmd := &cobra.Command{
+		Use:   "remove-tags INSTANCE",
+		Short: "Remove network tags from a VM instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			existing, err := instanceTags(ctx, client, project, zone, args[0])
+			if err != nil {
+				return err
+			}
+			updated := removeTags(existing, tags)
+			if err := client.SetTags(ctx, project, zone, args[0], updated); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated tags on instance %q.\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringSliceVar(&tags, "tags", nil, "Tags to remove")
+	return cmd
+}
+
+func newInstancesSetMachineTypeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var machineType string
+
+	cmd := &cobra.Command{
+		Use:   "set-machine-type INSTANCE",
+		Short: "Change the machine type of a stopped VM instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if machineType == "" {
+				return fmt.Errorf("--machine-type is required")
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.SetMachineType(ctx, project, zone, args[0], machineType); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Set machine type on instance %q to %q.\n", args[0], machineType)
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringVar(&machineType, "machine-type", "", "New machine type (e.g. n1-standard-2)")
+	return cmd
+}
+
+func newInstancesAttachDiskCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var disk string
+	var mode string
+
+	cmd := &cobra.Command{
+		Use:   "attach-disk INSTANCE",
+		Short: "Attach a persistent disk to a VM instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if disk == "" {
+				return fmt.Errorf("--disk is required")
+			}
+			readOnly := strings.EqualFold(mode, "ro")
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.AttachDisk(ctx, project, zone, args[0], disk, readOnly); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Attached disk %q to instance %q.\n", disk, args[0])
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringVar(&disk, "disk", "", "Name of the disk to attach")
+	cmd.Flags().StringVar(&mode, "mode", "rw", "Disk mode: ro (read-only) or rw (read-write)")
+	return cmd
+}
+
+func newInstancesDetachDiskCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var deviceName string
+
+	cmd := &cobra.Command{
+		Use:   "detach-disk INSTANCE",
+		Short: "Detach a persistent disk from a VM instance",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			zone, err := requireZone(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if deviceName == "" {
+				return fmt.Errorf("--device-name is required")
+			}
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.DetachDisk(ctx, project, zone, args[0], deviceName); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Detached device %q from instance %q.\n", deviceName, args[0])
+			return nil
+		},
+	}
+	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	cmd.Flags().StringVar(&deviceName, "device-name", "", "Device name of the disk to detach")
+	return cmd
+}
+
+// instanceTags retrieves the current network tags for an instance.
+func instanceTags(ctx context.Context, client Client, project, zone, instance string) ([]string, error) {
+	inst, err := client.GetInstance(ctx, project, zone, instance)
+	if err != nil {
+		return nil, err
+	}
+	return inst.Tags, nil
+}
+
+func mergeTags(existing, add []string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(add))
+	for _, t := range existing {
+		seen[t] = struct{}{}
+	}
+	for _, t := range add {
+		seen[t] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for t := range seen {
+		out = append(out, t)
+	}
+	return out
+}
+
+func removeTags(existing, remove []string) []string {
+	rm := make(map[string]struct{}, len(remove))
+	for _, t := range remove {
+		rm[t] = struct{}{}
+	}
+	var out []string
+	for _, t := range existing {
+		if _, skip := rm[t]; !skip {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func requireProject(cmd *cobra.Command, cfg *config.Config) (string, error) {

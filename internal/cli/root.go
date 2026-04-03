@@ -18,6 +18,7 @@ import (
 	"github.com/mosajjal/gcgo/internal/container"
 	"github.com/mosajjal/gcgo/internal/datacatalog"
 	"github.com/mosajjal/gcgo/internal/dataflow"
+	"github.com/mosajjal/gcgo/internal/dns"
 	"github.com/mosajjal/gcgo/internal/dataplex"
 	"github.com/mosajjal/gcgo/internal/dataproc"
 	"github.com/mosajjal/gcgo/internal/deploy"
@@ -122,6 +123,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(monitoring.NewCommand(cfg, creds))
 	root.AddCommand(scc.NewCommand(creds))
 	root.AddCommand(workflows.NewCommand(cfg, creds))
+	root.AddCommand(dns.NewCommand(cfg, creds))
 
 	configureHelp(root)
 

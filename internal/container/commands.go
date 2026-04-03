@@ -41,6 +41,7 @@ func newClustersCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comm
 		newClustersDeleteCommand(cfg, creds),
 		newClustersUpdateCommand(cfg, creds),
 		newClustersUpgradeCommand(cfg, creds),
+		newClustersResizeCommand(cfg, creds),
 		newClustersOperationsCommand(cfg, creds),
 		newGetCredentialsCommand(cfg, creds),
 	)
@@ -360,6 +361,52 @@ func newClustersUpgradeCommand(cfg *config.Config, creds *auth.Credentials) *cob
 
 	cmd.Flags().StringVar(&location, "location", "", "Cluster location")
 	cmd.Flags().StringVar(&version, "cluster-version", "", "Desired cluster version")
+	return cmd
+}
+
+func newClustersResizeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var (
+		location  string
+		nodePool  string
+		numNodes  int32
+	)
+
+	cmd := &cobra.Command{
+		Use:   "resize CLUSTER",
+		Short: "Resize a GKE cluster node pool",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			if location == "" {
+				location = cfg.Region()
+			}
+			if location == "" {
+				return fmt.Errorf("--location is required (or set region in config)")
+			}
+			if nodePool == "" {
+				return fmt.Errorf("--node-pool is required")
+			}
+
+			ctx := context.Background()
+			client, err := gkeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+			if err := client.ResizeCluster(ctx, project, location, args[0], nodePool, numNodes); err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Resized cluster %s node pool %s to %d nodes.\n", args[0], nodePool, numNodes)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&location, "location", "", "Cluster location")
+	cmd.Flags().StringVar(&nodePool, "node-pool", "", "Node pool name")
+	cmd.Flags().Int32Var(&numNodes, "num-nodes", 0, "Target node count")
+	_ = cmd.MarkFlagRequired("num-nodes")
 	return cmd
 }
 

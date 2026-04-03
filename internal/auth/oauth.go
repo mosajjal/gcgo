@@ -176,6 +176,141 @@ func (c *Credentials) BrowserLogin(ctx context.Context) (string, error) {
 	return email, nil
 }
 
+// BrowserLoginADC runs the same OAuth browser flow as BrowserLogin but writes
+// credentials to the standard ADC path (~/.config/gcloud/application_default_credentials.json).
+// It returns the email and the path where credentials were stored.
+func (c *Credentials) BrowserLoginADC(ctx context.Context) (email, path string, err error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", "", fmt.Errorf("start local server: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	redirectURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	conf := &oauth2.Config{
+		ClientID:     oauthClientID,
+		ClientSecret: oauthClientSecret,
+		Scopes: []string{
+			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
+			scopePlatform,
+		},
+		Endpoint:    google.Endpoint,
+		RedirectURL: redirectURL,
+	}
+
+	state, err := randomState()
+	if err != nil {
+		_ = listener.Close()
+		return "", "", fmt.Errorf("generate state: %w", err)
+	}
+
+	type result struct {
+		code string
+		err  error
+	}
+	codeCh := make(chan result, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != state {
+			codeCh <- result{err: fmt.Errorf("state mismatch — possible CSRF")}
+			http.Error(w, "state mismatch", http.StatusBadRequest)
+			return
+		}
+		if errParam := r.URL.Query().Get("error"); errParam != "" {
+			desc := r.URL.Query().Get("error_description")
+			codeCh <- result{err: fmt.Errorf("auth error: %s — %s", errParam, desc)}
+			_, _ = fmt.Fprintf(w, "<html><body><h2>Authentication failed</h2><p>Error: %s</p></body></html>", errParam) //nolint:gosec // errParam is from Google's OAuth response, not user input
+			return
+		}
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			codeCh <- result{err: fmt.Errorf("no code in callback")}
+			http.Error(w, "no code", http.StatusBadRequest)
+			return
+		}
+		codeCh <- result{code: code}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprint(w, `<html><body><h2>Authenticated</h2><p>You can close this tab and return to the terminal.</p></body></html>`)
+	})
+
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			codeCh <- result{err: fmt.Errorf("local server: %w", err)}
+		}
+	}()
+
+	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+	if err := openBrowser(authURL); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Could not open browser automatically.\nOpen this URL in your browser:\n\n  %s\n\n", authURL)
+	}
+
+	var res result
+	select {
+	case res = <-codeCh:
+	case <-ctx.Done():
+		_ = server.Close()
+		return "", "", ctx.Err()
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = server.Shutdown(shutdownCtx)
+
+	if res.err != nil {
+		return "", "", res.err
+	}
+
+	token, err := conf.Exchange(ctx, res.code)
+	if err != nil {
+		return "", "", fmt.Errorf("exchange auth code: %w", err)
+	}
+	if token.RefreshToken == "" {
+		return "", "", fmt.Errorf("no refresh token returned — try revoking access at https://myaccount.google.com/permissions and login again")
+	}
+
+	userEmail, _ := fetchUserEmail(ctx, conf, token)
+	if userEmail == "" {
+		userEmail = "(authorized user)"
+	}
+
+	// ADC format — no Account field (not part of the spec)
+	cred := struct {
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"` //nolint:gosec // ADC JSON field name, not a leaked secret
+		RefreshToken string `json:"refresh_token"` //nolint:gosec // ADC JSON field name, not a leaked secret
+		Type         string `json:"type"`
+	}{
+		ClientID:     oauthClientID,
+		ClientSecret: oauthClientSecret,
+		RefreshToken: token.RefreshToken,
+		Type:         "authorized_user",
+	}
+
+	data, err := json.MarshalIndent(cred, "", "  ")
+	if err != nil {
+		return "", "", fmt.Errorf("marshal credentials: %w", err)
+	}
+
+	adcPath := adcFilePath()
+	if adcPath == "" {
+		return "", "", fmt.Errorf("resolve adc path: unable to determine user config dir")
+	}
+	if err := os.MkdirAll(filepath.Dir(adcPath), 0o700); err != nil {
+		return "", "", fmt.Errorf("create adc dir: %w", err)
+	}
+	if err := os.WriteFile(adcPath, data, 0o600); err != nil {
+		return "", "", fmt.Errorf("store adc credentials: %w", err)
+	}
+
+	return userEmail, adcPath, nil
+}
+
 func fetchUserEmail(ctx context.Context, conf *oauth2.Config, token *oauth2.Token) (string, error) {
 	client := conf.Client(ctx, token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")

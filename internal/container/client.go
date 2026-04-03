@@ -46,6 +46,7 @@ type Client interface {
 	DeleteCluster(ctx context.Context, project, location, name string) error
 	UpdateCluster(ctx context.Context, project, location, name string, req *UpdateClusterRequest) error
 	UpgradeCluster(ctx context.Context, project, location, name string, req *UpgradeClusterRequest) error
+	ResizeCluster(ctx context.Context, project, location, cluster, nodePool string, nodeCount int32) error
 	ListOperations(ctx context.Context, project, location string) ([]*Operation, error)
 	GetOperation(ctx context.Context, project, location, name string) (*Operation, error)
 	GetClusterAuth(ctx context.Context, project, location, name string) (*ClusterAuth, error)
@@ -167,6 +168,17 @@ func (c *gcpClient) UpgradeCluster(ctx context.Context, project, location, name 
 		NodeVersion:   req.Version,
 	}
 	return c.UpdateCluster(ctx, project, location, name, update)
+}
+
+func (c *gcpClient) ResizeCluster(ctx context.Context, project, location, cluster, nodePool string, nodeCount int32) error {
+	op, err := c.cm.SetNodePoolSize(ctx, &containerpb.SetNodePoolSizeRequest{
+		Name:      fmt.Sprintf("projects/%s/locations/%s/clusters/%s/nodePools/%s", project, location, cluster, nodePool),
+		NodeCount: nodeCount,
+	})
+	if err != nil {
+		return fmt.Errorf("resize cluster %s: %w", cluster, err)
+	}
+	return waitForOperation(ctx, c.cm, op)
 }
 
 func (c *gcpClient) ListOperations(ctx context.Context, project, location string) ([]*Operation, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
@@ -247,6 +248,9 @@ func newSubscriptionsCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		newSubsCreateCommand(cfg, creds),
 		newSubsDeleteCommand(cfg, creds),
 		newSubsPullCommand(cfg, creds),
+		newSubsAckCommand(cfg, creds),
+		newSubsModifyAckDeadlineCommand(cfg, creds),
+		newSubsSeekCommand(cfg, creds),
 	)
 
 	return cmd
@@ -426,6 +430,135 @@ func newSubsPullCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comm
 	}
 
 	cmd.Flags().Int("max-messages", 10, "Maximum number of messages to pull")
+
+	return cmd
+}
+
+func newSubsAckCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var ackIDs []string
+
+	cmd := &cobra.Command{
+		Use:   "ack SUBSCRIPTION",
+		Short: "Acknowledge messages in a subscription",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(ackIDs) == 0 {
+				return fmt.Errorf("--ack-ids is required")
+			}
+
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+
+			ctx := context.Background()
+			client, err := pubsubClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			if err := client.AcknowledgeMessages(ctx, project, args[0], ackIDs); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Acknowledged %d message(s).\n", len(ackIDs))
+			return nil
+		},
+	}
+
+	cmd.Flags().StringSliceVar(&ackIDs, "ack-ids", nil, "Ack IDs to acknowledge (comma-separated)")
+	_ = cmd.MarkFlagRequired("ack-ids")
+
+	return cmd
+}
+
+func newSubsModifyAckDeadlineCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var ackIDs []string
+	var deadline int32
+
+	cmd := &cobra.Command{
+		Use:   "modify-ack-deadline SUBSCRIPTION",
+		Short: "Modify the ack deadline for messages",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(ackIDs) == 0 {
+				return fmt.Errorf("--ack-ids is required")
+			}
+
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+
+			ctx := context.Background()
+			client, err := pubsubClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			if err := client.ModifyAckDeadline(ctx, project, args[0], ackIDs, deadline); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Modified ack deadline to %ds for %d message(s).\n", deadline, len(ackIDs))
+			return nil
+		},
+	}
+
+	cmd.Flags().StringSliceVar(&ackIDs, "ack-ids", nil, "Ack IDs (comma-separated)")
+	cmd.Flags().Int32Var(&deadline, "ack-deadline", 10, "New ack deadline in seconds")
+	_ = cmd.MarkFlagRequired("ack-ids")
+
+	return cmd
+}
+
+func newSubsSeekCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var seekTime string
+	var snapshot string
+
+	cmd := &cobra.Command{
+		Use:   "seek SUBSCRIPTION",
+		Short: "Seek a subscription to a time or snapshot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if seekTime == "" && snapshot == "" {
+				return fmt.Errorf("one of --time or --snapshot is required")
+			}
+			if seekTime != "" && snapshot != "" {
+				return fmt.Errorf("--time and --snapshot are mutually exclusive")
+			}
+
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+
+			req := &SeekRequest{Snapshot: snapshot}
+			if seekTime != "" {
+				t, err := time.Parse(time.RFC3339, seekTime)
+				if err != nil {
+					return fmt.Errorf("parse --time: %w", err)
+				}
+				req.Time = t
+			}
+
+			ctx := context.Background()
+			client, err := pubsubClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			if err := client.SeekSubscription(ctx, project, args[0], req); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Seeked subscription %s.\n", args[0])
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&seekTime, "time", "", "Seek to a time (RFC3339 format)")
+	cmd.Flags().StringVar(&snapshot, "snapshot", "", "Seek to a snapshot")
 
 	return cmd
 }

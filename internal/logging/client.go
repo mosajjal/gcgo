@@ -43,6 +43,7 @@ type Client interface {
 	ListSinks(ctx context.Context, parent, filter string) ([]*Sink, error)
 	GetSink(ctx context.Context, name string) (*Sink, error)
 	CreateSink(ctx context.Context, parent string, sink *loggingapi.LogSink) (*Sink, error)
+	UpdateSink(ctx context.Context, name string, sink *loggingapi.LogSink, updateMask string) (*Sink, error)
 	DeleteSink(ctx context.Context, name string) error
 }
 
@@ -125,6 +126,18 @@ func (c *gcpClient) CreateSink(ctx context.Context, parent string, sink *logging
 		return nil, fmt.Errorf("create logging sink %s: %w", sink.Name, err)
 	}
 	return sinkFromAPI(created), nil
+}
+
+func (c *gcpClient) UpdateSink(ctx context.Context, name string, sink *loggingapi.LogSink, updateMask string) (*Sink, error) {
+	call := c.api.Sinks.Update(name, sink).Context(ctx)
+	if updateMask != "" {
+		call = call.UpdateMask(updateMask)
+	}
+	updated, err := call.Do()
+	if err != nil {
+		return nil, fmt.Errorf("update logging sink %s: %w", name, err)
+	}
+	return sinkFromAPI(updated), nil
 }
 
 func (c *gcpClient) DeleteSink(ctx context.Context, name string) error {

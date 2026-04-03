@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
@@ -156,6 +157,7 @@ func newSinksCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command
 		newSinksListCommand(cfg, creds),
 		newSinksDescribeCommand(creds),
 		newSinksCreateCommand(cfg, creds),
+		newSinksUpdateCommand(creds),
 		newSinksDeleteCommand(creds),
 	)
 	return cmd
@@ -303,6 +305,69 @@ func newSinksCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 	cmd.Flags().BoolVar(&includeChildren, "include-children", false, "Include child resources")
 	cmd.Flags().BoolVar(&interceptChildren, "intercept-children", false, "Intercept logs from child resources")
 	cmd.Flags().BoolVar(&uniqueWriterIdentity, "unique-writer-identity", false, "Use a unique writer identity")
+	return cmd
+}
+
+func newSinksUpdateCommand(creds *auth.Credentials) *cobra.Command {
+	var destination string
+	var filter string
+	var description string
+
+	cmd := &cobra.Command{
+		Use:   "update SINK_NAME",
+		Short: "Update a logging sink",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			opt, err := creds.ClientOption(ctx)
+			if err != nil {
+				return err
+			}
+			client, err := NewClient(ctx, opt)
+			if err != nil {
+				return err
+			}
+
+			// Fetch existing sink first to preserve unset fields.
+			existing, err := client.GetSink(ctx, args[0])
+			if err != nil {
+				return err
+			}
+
+			sink := &loggingapi.LogSink{
+				Name:        existing.Name,
+				Destination: existing.Destination,
+				Filter:      existing.Filter,
+				Description: existing.Description,
+			}
+
+			var maskFields []string
+			if cmd.Flags().Changed("destination") {
+				sink.Destination = destination
+				maskFields = append(maskFields, "destination")
+			}
+			if cmd.Flags().Changed("log-filter") {
+				sink.Filter = filter
+				maskFields = append(maskFields, "filter")
+			}
+			if cmd.Flags().Changed("description") {
+				sink.Description = description
+				maskFields = append(maskFields, "description")
+			}
+
+			updateMask := strings.Join(maskFields, ",")
+			updated, err := client.UpdateSink(ctx, args[0], sink, updateMask)
+			if err != nil {
+				return err
+			}
+			return output.PrintJSON(cmd.OutOrStdout(), updated)
+		},
+	}
+
+	cmd.Flags().StringVar(&destination, "destination", "", "Sink destination")
+	cmd.Flags().StringVar(&filter, "log-filter", "", "Log filter expression")
+	cmd.Flags().StringVar(&description, "description", "", "Sink description")
+
 	return cmd
 }
 

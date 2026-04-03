@@ -3,6 +3,7 @@ package spanner
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
@@ -20,6 +21,8 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	cmd.AddCommand(
 		newInstancesCommand(cfg, creds),
 		newDatabasesCommand(cfg, creds),
+		newBackupsCommand(cfg, creds),
+		newOperationsCommand(cfg, creds),
 	)
 
 	return cmd
@@ -415,4 +418,293 @@ func newDatabasesExecuteSQLCommand(cfg *config.Config, creds *auth.Credentials) 
 	cmd.Flags().String("sql", "", "SQL statement to execute")
 
 	return cmd
+}
+
+// --- backups subcommands ---
+
+func newBackupsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "backups",
+		Short: "Manage Spanner backups",
+	}
+
+	cmd.AddCommand(
+		newBackupsListCommand(cfg, creds),
+		newBackupsDescribeCommand(cfg, creds),
+		newBackupsCreateCommand(cfg, creds),
+		newBackupsDeleteCommand(cfg, creds),
+	)
+
+	return cmd
+}
+
+func newBackupsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List backups in a Spanner instance",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
+				return fmt.Errorf("--instance is required")
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			backups, err := client.ListBackups(ctx, project, inst)
+			if err != nil {
+				return err
+			}
+
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), backups)
+			}
+
+			headers := []string{"NAME", "DATABASE", "STATE", "SIZE", "EXPIRE_TIME"}
+			rows := make([][]string, len(backups))
+			for i, b := range backups {
+				rows[i] = []string{b.Name, b.Database, b.State, fmt.Sprintf("%d", b.SizeBytes), b.ExpireTime}
+			}
+			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
+		},
+	}
+
+	cmd.Flags().String("instance", "", "Spanner instance name")
+
+	return cmd
+}
+
+func newBackupsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "describe BACKUP",
+		Short: "Describe a Spanner backup",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
+				return fmt.Errorf("--instance is required")
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			b, err := client.GetBackup(ctx, project, inst, args[0])
+			if err != nil {
+				return err
+			}
+
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), b)
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Name:        %s\n", b.Name)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Instance:    %s\n", b.Instance)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Database:    %s\n", b.Database)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "State:       %s\n", b.State)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Size Bytes:  %d\n", b.SizeBytes)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Create Time: %s\n", b.CreateTime)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Expire Time: %s\n", b.ExpireTime)
+			return nil
+		},
+	}
+
+	cmd.Flags().String("instance", "", "Spanner instance name")
+
+	return cmd
+}
+
+func newBackupsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	var database string
+	var expireTimeStr string
+
+	cmd := &cobra.Command{
+		Use:   "create BACKUP_ID",
+		Short: "Create a Spanner backup",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
+				return fmt.Errorf("--instance is required")
+			}
+			if database == "" {
+				return fmt.Errorf("--database is required")
+			}
+			if expireTimeStr == "" {
+				return fmt.Errorf("--expire-time is required")
+			}
+			expireTime, err := time.Parse(time.RFC3339, expireTimeStr)
+			if err != nil {
+				return fmt.Errorf("parse expire-time: %w", err)
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			req := &CreateBackupRequest{
+				BackupID:   args[0],
+				Database:   database,
+				ExpireTime: expireTime,
+			}
+			if err := client.CreateBackup(ctx, project, inst, req); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Created Spanner backup %q.\n", args[0])
+			return nil
+		},
+	}
+
+	cmd.Flags().String("instance", "", "Spanner instance name")
+	cmd.Flags().StringVar(&database, "database", "", "Source database name")
+	cmd.Flags().StringVar(&expireTimeStr, "expire-time", "", "Expiry time in RFC3339 format")
+
+	return cmd
+}
+
+func newBackupsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete BACKUP",
+		Short: "Delete a Spanner backup",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
+				return fmt.Errorf("--instance is required")
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			if err := client.DeleteBackup(ctx, project, inst, args[0]); err != nil {
+				return err
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Deleted Spanner backup %q.\n", args[0])
+			return nil
+		},
+	}
+
+	cmd.Flags().String("instance", "", "Spanner instance name")
+
+	return cmd
+}
+
+// --- operations subcommands ---
+
+func newOperationsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "operations",
+		Short: "Manage Spanner operations",
+	}
+
+	cmd.AddCommand(
+		newOperationsListCommand(cfg, creds),
+		newOperationsDescribeCommand(cfg, creds),
+	)
+
+	return cmd
+}
+
+func newOperationsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List operations for a Spanner instance",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			project, err := requireProject(cmd, cfg)
+			if err != nil {
+				return err
+			}
+			inst, _ := cmd.Flags().GetString("instance")
+			if inst == "" {
+				return fmt.Errorf("--instance is required")
+			}
+
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			ops, err := client.ListOperations(ctx, project, inst)
+			if err != nil {
+				return err
+			}
+
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), ops)
+			}
+
+			headers := []string{"NAME", "DONE", "ERROR"}
+			rows := make([][]string, len(ops))
+			for i, o := range ops {
+				rows[i] = []string{o.Name, fmt.Sprintf("%t", o.Done), o.Error}
+			}
+			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
+		},
+	}
+
+	cmd.Flags().String("instance", "", "Spanner instance name")
+
+	return cmd
+}
+
+func newOperationsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
+	return &cobra.Command{
+		Use:   "describe OPERATION_NAME",
+		Short: "Describe a Spanner operation",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+			client, err := makeClient(ctx, creds)
+			if err != nil {
+				return err
+			}
+
+			op, err := client.GetOperation(ctx, args[0])
+			if err != nil {
+				return err
+			}
+
+			format, _ := cmd.Flags().GetString("format")
+			if format == "json" {
+				return output.PrintJSON(cmd.OutOrStdout(), op)
+			}
+
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Name:  %s\n", op.Name)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Done:  %t\n", op.Done)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Error: %s\n", op.Error)
+			return nil
+		},
+	}
 }

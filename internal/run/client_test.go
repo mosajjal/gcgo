@@ -9,19 +9,20 @@ import (
 )
 
 type mockClient struct {
-	services    []*Service
-	serviceMap  map[string]*Service
-	revisions   []*Revision
-	revisionMap map[string]*Revision
-	listErr     error
-	getErr      error
-	deployErr   error
-	deleteErr   error
-	revisionErr error
-	trafficErr  error
-	policy      *iampb.Policy
-	permErr     error
-	setPolicy   *iampb.Policy
+	services       []*Service
+	serviceMap     map[string]*Service
+	revisions      []*Revision
+	revisionMap    map[string]*Revision
+	listErr        error
+	getErr         error
+	deployErr      error
+	deleteErr      error
+	revisionErr    error
+	delRevisionErr error
+	trafficErr     error
+	policy         *iampb.Policy
+	permErr        error
+	setPolicy      *iampb.Policy
 }
 
 func (m *mockClient) ListServices(_ context.Context, _, _ string) ([]*Service, error) {
@@ -60,6 +61,10 @@ func (m *mockClient) GetRevision(_ context.Context, _, _, name string) (*Revisio
 		return nil, fmt.Errorf("revision %q not found", name)
 	}
 	return rev, nil
+}
+
+func (m *mockClient) DeleteRevision(_ context.Context, _, _, _ string) error {
+	return m.delRevisionErr
 }
 
 func (m *mockClient) UpdateTraffic(_ context.Context, _, _, _ string, _ *UpdateTrafficRequest) (*Service, error) {
