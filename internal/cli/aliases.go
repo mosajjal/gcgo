@@ -21,7 +21,7 @@ import (
 func newWhoamiCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
-		Short: "Show current identity and active configuration",
+		Short: "Show active identity, project, region, and zone [shortcut]",
 		Long:  "Prints the authenticated account, active project, default region, and default zone.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			account, err := creds.ActiveAccount()
@@ -78,7 +78,7 @@ func newUseCommand(cfg *config.Config) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "use PROJECT",
-		Short: "Set the active project (and optionally region/zone)",
+		Short: "Set project/region/zone in one step [shortcut for gcgo config set]",
 		Long:  "Shorthand for 'gcgo config set project PROJECT'. Optionally set region and zone in the same command.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -151,7 +151,7 @@ var consoleServices = map[string]string{
 func newOpenCommand(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "open [SERVICE]",
-		Short: "Open the GCP console in your browser",
+		Short: "Open GCP console in browser [shortcut for console.cloud.google.com]",
 		Long: fmt.Sprintf("Opens console.cloud.google.com for the current project.\nAvailable services: %s",
 			strings.Join(serviceNames(), ", ")),
 		Args: cobra.MaximumNArgs(1),
@@ -191,7 +191,7 @@ func newSSHCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ssh VM [-- EXTRA_ARGS...]",
-		Short: "SSH into a Compute Engine VM (shortcut for gcgo compute ssh)",
+		Short: "SSH into a VM [shortcut for gcgo compute ssh]",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			project, err := requireAlias(cmd, cfg)
@@ -238,7 +238,7 @@ func newLogsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command 
 
 	cmd := &cobra.Command{
 		Use:   "logs [FILTER]",
-		Short: "Read or stream logs (shortcut for gcgo logging read/tail)",
+		Short: "Read or stream logs [shortcut for gcgo logging read/tail]",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			project, err := requireAlias(cmd, cfg)
@@ -287,7 +287,7 @@ func newLogsCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command 
 func newTokenCommand(creds *auth.Credentials) *cobra.Command {
 	return &cobra.Command{
 		Use:   "token",
-		Short: "Print the current access token",
+		Short: "Print current access token [shortcut for gcgo auth print-access-token]",
 		Long:  "Prints the OAuth2 access token for the active credentials. Useful for: curl -H \"Authorization: Bearer $(gcgo token)\" ...",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
