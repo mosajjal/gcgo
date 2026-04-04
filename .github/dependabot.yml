@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      gcp-libs:
+        patterns:
+          - "cloud.google.com/go*"
+          - "google.golang.org/api*"
+          - "google.golang.org/grpc*"
+          - "google.golang.org/protobuf*"
+      go-tooling:
+        patterns:
+          - "github.com/spf13/*"
+          - "github.com/BurntSushi/*"
+          - "golang.org/x/*"

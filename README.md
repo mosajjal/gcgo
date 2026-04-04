@@ -179,6 +179,47 @@ esac
 
 The helper path can include arguments — `GCGO_CREDENTIALS_HELPER="my-helper --profile prod"` works.
 
+## Shortcuts
+
+Convenience commands at the top level — each is a shortcut for a longer canonical command.
+
+```sh
+# Show active identity, project, region, and zone
+gcgo whoami
+gcgo whoami --format json
+
+# Set project (and optionally region/zone) in one step
+gcgo use my-project-id
+gcgo use my-project-id --region us-central1 --zone us-central1-a
+
+# Open the GCP console in your browser
+gcgo open                  # project dashboard
+gcgo open run              # Cloud Run console
+gcgo open logs             # Cloud Logging
+gcgo open sql              # Cloud SQL
+gcgo open gke              # GKE clusters
+gcgo open storage          # Cloud Storage browser
+gcgo open iam              # IAM & Admin
+gcgo open secrets          # Secret Manager
+gcgo open builds           # Cloud Build
+gcgo open monitoring       # Cloud Monitoring
+# …and more: compute, functions, spanner, firestore, bigtable, kms, pubsub, redis, artifacts
+
+# SSH into a VM
+gcgo ssh my-vm --zone us-central1-a
+gcgo ssh my-vm --zone us-central1-a -- -L 8080:localhost:8080
+
+# Read or stream logs
+gcgo logs 'severity>=ERROR'
+gcgo logs 'resource.type="cloud_run_revision"' --limit 100
+gcgo logs --tail
+
+# Print the current access token (useful for scripting)
+gcgo token
+gcgo token | docker login -u oauth2accesstoken --password-stdin gcr.io
+GOOGLE_OAUTH_ACCESS_TOKEN=$(gcgo token) terraform apply
+```
+
 ## Commands
 
 ```
@@ -327,4 +368,4 @@ make clean      # remove build artifacts
 
 ## License
 
-MIT
+[MIT](./LICENSE) — Copyright (c) 2026 Ali Mosajjal
