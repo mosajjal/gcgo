@@ -6,6 +6,7 @@ import (
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,7 @@ func requireRegion(cmd *cobra.Command, cfg *config.Config) (string, error) {
 		region = cfg.Region()
 	}
 	if region == "" {
-		return "", fmt.Errorf("no region set (use --region or 'gcgo config set region REGION')")
+		return "", fmt.Errorf("no region set — use --region REGION, run 'gcgo config set region REGION' to persist, or 'gcgo compute regions list' to see available regions")
 	}
 	return region, nil
 }
@@ -207,7 +208,7 @@ func newSubnetsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -237,7 +238,7 @@ func newSubnetsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cob
 			return output.PrintJSON(cmd.OutOrStdout(), subnet)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -270,7 +271,7 @@ func newSubnetsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().StringVar(&req.Network, "network", "", "VPC network")
 	cmd.Flags().StringVar(&req.IPCIDRRange, "range", "", "IP CIDR range (e.g. 10.0.0.0/24)")
 	cmd.Flags().StringVar(&req.Description, "description", "", "Subnet description")
@@ -303,7 +304,7 @@ func newSubnetsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -335,7 +336,7 @@ func newSubnetsExpandIPRangeCommand(cfg *config.Config, creds *auth.Credentials)
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().StringVar(&newCIDR, "prefix-length", "", "New prefix length or CIDR (e.g. 10.0.0.0/16)")
 	return cmd
 }
@@ -390,7 +391,7 @@ func newAddressesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -420,7 +421,7 @@ func newAddressesDescribeCommand(cfg *config.Config, creds *auth.Credentials) *c
 			return output.PrintJSON(cmd.OutOrStdout(), addr)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -453,7 +454,7 @@ func newAddressesCreateCommand(cfg *config.Config, creds *auth.Credentials) *cob
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().StringVar(&req.AddressType, "address-type", "EXTERNAL", "Address type (INTERNAL or EXTERNAL)")
 	cmd.Flags().StringVar(&req.Purpose, "purpose", "", "Purpose (e.g. GCE_ENDPOINT)")
 	cmd.Flags().StringVar(&req.Subnetwork, "subnet", "", "Subnet (for internal addresses)")
@@ -486,7 +487,7 @@ func newAddressesDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cob
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -540,7 +541,7 @@ func newRoutersListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -570,7 +571,7 @@ func newRoutersDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cob
 			return output.PrintJSON(cmd.OutOrStdout(), router)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -603,7 +604,7 @@ func newRoutersCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().StringVar(&req.Network, "network", "", "VPC network")
 	cmd.Flags().Int64Var(&req.BGPAsn, "asn", 64512, "BGP ASN")
 	return cmd
@@ -635,7 +636,7 @@ func newRoutersDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 

@@ -3,9 +3,11 @@ package functions
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -45,6 +47,18 @@ func requireRegion(region string, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("--region is required (or set region in config)")
 	}
 	return r, nil
+}
+
+func addRegionCompletion(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("region", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var matches []string
+		for _, r := range flags.CommonRegions {
+			if strings.HasPrefix(r, toComplete) {
+				matches = append(matches, r)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 func makeClient(ctx context.Context, creds *auth.Credentials) (Client, error) {
@@ -97,6 +111,7 @@ func newListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command 
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -144,6 +159,7 @@ func newDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comm
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -184,6 +200,7 @@ func newDeployCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comman
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.Runtime, "runtime", "", "Runtime (e.g. go121, python312, nodejs20)")
 	cmd.Flags().StringVar(&req.EntryPoint, "entry-point", "", "Entry point function name")
 	cmd.Flags().StringVar(&req.Source, "source", "", "Source location (GCS bucket or local path)")
@@ -228,6 +245,7 @@ func newDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comman
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -266,6 +284,7 @@ func newCallCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command 
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&data, "data", "", "Data to send to the function")
 	return cmd
 }

@@ -48,6 +48,7 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		newZonesCommand(cfg, creds),
 		newRegionsCommand(cfg, creds),
 		newMachineTypesCommand(cfg, creds),
+		newDiskTypesCommand(cfg, creds),
 		newSSHCommand(cfg, creds),
 		newSCPCommand(cfg, creds),
 	)
@@ -635,9 +636,10 @@ func newInstancesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 			if err != nil {
 				return err
 			}
-			zone, err := requireZone(cmd, cfg)
-			if err != nil {
-				return err
+
+			zone, _ := cmd.Flags().GetString("zone")
+			if zone == "" {
+				zone = cfg.Zone()
 			}
 
 			ctx := context.Background()
@@ -646,7 +648,12 @@ func newInstancesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 				return err
 			}
 
-			instances, err := client.ListInstances(ctx, project, zone)
+			var instances []*Instance
+			if zone != "" {
+				instances, err = client.ListInstances(ctx, project, zone)
+			} else {
+				instances, err = client.AggregatedListInstances(ctx, project)
+			}
 			if err != nil {
 				return err
 			}

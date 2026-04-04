@@ -329,6 +329,14 @@ func (m *mockClient) ListMachineTypes(_ context.Context, _, _ string) ([]*Machin
 	return nil, nil
 }
 
+func (m *mockClient) AggregatedListInstances(_ context.Context, _ string) ([]*Instance, error) {
+	return m.instances, m.listErr
+}
+
+func (m *mockClient) ListDiskTypes(_ context.Context, _, _ string) ([]*DiskType, error) {
+	return nil, nil
+}
+
 func TestMockListInstances(t *testing.T) {
 	mock := &mockClient{
 		instances: []*Instance{

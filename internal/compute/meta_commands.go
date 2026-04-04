@@ -7,6 +7,7 @@ import (
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -55,7 +56,7 @@ func newZonesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Com
 		},
 	}
 	cmd.Flags().String("project", "", "GCP project ID")
-	cmd.Flags().String("region", "", "Filter by region")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().String("format", "table", "Output format: table, json")
 	return cmd
 }

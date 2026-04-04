@@ -8,6 +8,7 @@ import (
 	"cloud.google.com/go/iam/apiv1/iampb"
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -38,6 +39,21 @@ func requireProject(cmd *cobra.Command, cfg *config.Config) (string, error) {
 		return "", fmt.Errorf("no project set (use --project or 'gcgo config set project PROJECT_ID')")
 	}
 	return project, nil
+}
+
+// addRegionCompletion registers region tab-completion on cmd. Call this after
+// any cmd.Flags().StringVar(..., "region", ...) to keep the StringVar binding
+// while still providing completions.
+func addRegionCompletion(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("region", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var matches []string
+		for _, r := range flags.CommonRegions {
+			if strings.HasPrefix(r, toComplete) {
+				matches = append(matches, r)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 func runClient(ctx context.Context, creds *auth.Credentials) (Client, error) {
@@ -111,6 +127,7 @@ func newServicesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -150,6 +167,7 @@ func newServicesDescribeCommand(cfg *config.Config, creds *auth.Credentials) *co
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -189,6 +207,7 @@ func newServicesDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -241,6 +260,7 @@ func newServicesUpdateCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 
 	cmd.Flags().StringVar(&req.Image, "image", "", "Container image")
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.Memory, "memory", "", "Memory limit")
 	cmd.Flags().StringVar(&req.CPU, "cpu", "", "CPU limit")
 	cmd.Flags().Int32Var(&req.Port, "port", 0, "Container port")
@@ -289,6 +309,7 @@ func newServicesUpdateTrafficCommand(cfg *config.Config, creds *auth.Credentials
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().BoolVar(&req.ToLatest, "to-latest", false, "Send traffic to the latest ready revision")
 	cmd.Flags().StringVar(&req.Revision, "to-revision", "", "Revision name to receive traffic")
 	cmd.Flags().Int32Var(&req.Percent, "percent", 100, "Traffic percent for the target")
@@ -362,6 +383,7 @@ func newServicesRollbackCommand(cfg *config.Config, creds *auth.Credentials) *co
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&toRevision, "to-revision", "", "Revision to receive traffic")
 	cmd.Flags().Int32Var(&percent, "percent", 100, "Traffic percent for the target revision")
 	cmd.Flags().StringVar(&tag, "tag", "", "Optional traffic tag")
@@ -417,6 +439,7 @@ func newServicesIAMGetCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -466,6 +489,7 @@ func newServicesIAMSetCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&member, "member", "", "IAM member")
 	cmd.Flags().StringVar(&role, "role", "", "IAM role")
 	cmd.Flags().BoolVar(&remove, "remove", false, "Remove the binding instead of adding it")
@@ -510,6 +534,7 @@ func newServicesIAMTestCommand(cfg *config.Config, creds *auth.Credentials) *cob
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringSliceVar(&permissions, "permission", nil, "Permission to test (repeatable)")
 
 	return cmd
@@ -563,6 +588,7 @@ func newDeployCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comman
 
 	cmd.Flags().StringVar(&req.Image, "image", "", "Container image")
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.Memory, "memory", "", "Memory limit")
 	cmd.Flags().StringVar(&req.CPU, "cpu", "", "CPU limit")
 	cmd.Flags().Int32Var(&req.Port, "port", 8080, "Container port")
@@ -635,6 +661,7 @@ func newRevisionsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&service, "service", "", "Cloud Run service name")
 
 	return cmd
@@ -674,6 +701,7 @@ func newRevisionsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *c
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -711,6 +739,7 @@ func newRevisionsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cob
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 

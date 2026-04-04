@@ -359,6 +359,7 @@ func newJobsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comm
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -398,6 +399,7 @@ func newJobsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -449,6 +451,7 @@ func newJobsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Co
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.Image, "image", "", "Container image")
 	cmd.Flags().StringSliceVar(&envSlice, "env", nil, "Environment variables (KEY=VALUE)")
 	_ = cmd.MarkFlagRequired("image")
@@ -491,6 +494,7 @@ func newJobsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Co
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -530,6 +534,7 @@ func newJobsRunCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comma
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -579,6 +584,7 @@ func newExecutionsListCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -618,6 +624,7 @@ func newExecutionsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -657,6 +664,7 @@ func newExecutionsCancelCommand(cfg *config.Config, creds *auth.Credentials) *co
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }

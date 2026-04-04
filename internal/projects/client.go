@@ -23,6 +23,8 @@ type Project struct {
 type Client interface {
 	List(ctx context.Context) ([]*Project, error)
 	Get(ctx context.Context, projectID string) (*Project, error)
+	CreateProject(ctx context.Context, projectID, name string, labels map[string]string) error
+	DeleteProject(ctx context.Context, projectID string) error
 }
 
 type gcpClient struct {
@@ -63,6 +65,36 @@ func (c *gcpClient) Get(ctx context.Context, projectID string) (*Project, error)
 		return nil, fmt.Errorf("get project %s: %w", projectID, err)
 	}
 	return fromProto(p), nil
+}
+
+func (c *gcpClient) CreateProject(ctx context.Context, projectID, name string, labels map[string]string) error {
+	op, err := c.rm.CreateProject(ctx, &resourcemanagerpb.CreateProjectRequest{
+		Project: &resourcemanagerpb.Project{
+			ProjectId:   projectID,
+			DisplayName: name,
+			Labels:      labels,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("create project %s: %w", projectID, err)
+	}
+	if _, err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait create project %s: %w", projectID, err)
+	}
+	return nil
+}
+
+func (c *gcpClient) DeleteProject(ctx context.Context, projectID string) error {
+	op, err := c.rm.DeleteProject(ctx, &resourcemanagerpb.DeleteProjectRequest{
+		Name: "projects/" + projectID,
+	})
+	if err != nil {
+		return fmt.Errorf("delete project %s: %w", projectID, err)
+	}
+	if _, err := op.Wait(ctx); err != nil {
+		return fmt.Errorf("wait delete project %s: %w", projectID, err)
+	}
+	return nil
 }
 
 func fromProto(p *resourcemanagerpb.Project) *Project {

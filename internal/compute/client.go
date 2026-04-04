@@ -179,6 +179,8 @@ type Client interface {
 	ListZones(ctx context.Context, project, region string) ([]*Zone, error)
 	ListRegions(ctx context.Context, project string) ([]*Region, error)
 	ListMachineTypes(ctx context.Context, project, zone string) ([]*MachineType, error)
+	AggregatedListInstances(ctx context.Context, project string) ([]*Instance, error)
+	ListDiskTypes(ctx context.Context, project, zone string) ([]*DiskType, error)
 }
 
 // CreateInstanceRequest holds parameters for instance creation.
@@ -296,6 +298,13 @@ type MachineType struct {
 	Zone        string `json:"zone"`
 }
 
+// DiskType holds persistent disk type fields.
+type DiskType struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Zone        string `json:"zone"`
+}
+
 // SSLCertificate holds SSL certificate fields.
 type SSLCertificate struct {
 	Name        string   `json:"name"`
@@ -362,6 +371,7 @@ type gcpClient struct {
 	zones                   *compute.ZonesClient
 	regions                 *compute.RegionsClient
 	machineTypes            *compute.MachineTypesClient
+	diskTypes               *compute.DiskTypesClient
 }
 
 // NewClient creates a Client backed by the real GCP Compute API.
@@ -427,6 +437,10 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create machine types client: %w", err)
 	}
+	dtc, err := compute.NewDiskTypesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create disk types client: %w", err)
+	}
 
 	return &gcpClient{
 		instances:               ic,
@@ -444,6 +458,7 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 		zones:                   zc,
 		regions:                 rc,
 		machineTypes:            mtc,
+		diskTypes:               dtc,
 	}, nil
 }
 
@@ -935,4 +950,47 @@ func (c *gcpClient) DetachDisk(ctx context.Context, project, zone, instance, dev
 		return fmt.Errorf("detach disk %s from instance %s: %w", deviceName, instance, err)
 	}
 	return op.Wait(ctx)
+}
+
+func (c *gcpClient) AggregatedListInstances(ctx context.Context, project string) ([]*Instance, error) {
+	it := c.instances.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
+		Project: project,
+	})
+	var instances []*Instance
+	for {
+		pair, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("aggregated list instances: %w", err)
+		}
+		for _, inst := range pair.Value.GetInstances() {
+			instances = append(instances, instanceFromProto(inst))
+		}
+	}
+	return instances, nil
+}
+
+func (c *gcpClient) ListDiskTypes(ctx context.Context, project, zone string) ([]*DiskType, error) {
+	it := c.diskTypes.List(ctx, &computepb.ListDiskTypesRequest{
+		Project: project,
+		Zone:    zone,
+	})
+	var out []*DiskType
+	for {
+		dt, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list disk types: %w", err)
+		}
+		out = append(out, &DiskType{
+			Name:        dt.GetName(),
+			Description: dt.GetDescription(),
+			Zone:        dt.GetZone(),
+		})
+	}
+	return out, nil
 }

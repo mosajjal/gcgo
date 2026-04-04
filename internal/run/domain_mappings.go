@@ -192,6 +192,7 @@ func newDomainMappingsListCommand(cfg *config.Config, creds *auth.Credentials) *
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -231,6 +232,7 @@ func newDomainMappingsDescribeCommand(cfg *config.Config, creds *auth.Credential
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }
@@ -277,6 +279,7 @@ func newDomainMappingsCreateCommand(cfg *config.Config, creds *auth.Credentials)
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&service, "service", "", "Cloud Run service to map to")
 	_ = cmd.MarkFlagRequired("service")
 
@@ -318,6 +321,7 @@ func newDomainMappingsDeleteCommand(cfg *config.Config, creds *auth.Credentials)
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 
 	return cmd
 }

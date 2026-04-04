@@ -12,6 +12,7 @@ import (
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/compute"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/logging"
 	"github.com/spf13/cobra"
 )
@@ -111,6 +112,15 @@ func newUseCommand(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&region, "region", "", "Also set the default region")
+	_ = cmd.RegisterFlagCompletionFunc("region", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var matches []string
+		for _, r := range flags.CommonRegions {
+			if strings.HasPrefix(r, toComplete) {
+				matches = append(matches, r)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	})
 	cmd.Flags().StringVar(&zone, "zone", "", "Also set the default zone")
 	return cmd
 }

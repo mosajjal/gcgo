@@ -3,9 +3,11 @@ package sql
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -249,6 +251,15 @@ func newInstancesCreateCommand(cfg *config.Config, creds *auth.Credentials) *cob
 	cmd.Flags().StringVar(&req.DatabaseVersion, "database-version", "POSTGRES_15", "Database version")
 	cmd.Flags().StringVar(&req.Tier, "tier", "db-f1-micro", "Machine tier")
 	cmd.Flags().StringVar(&req.Region, "region", "", "Region")
+	_ = cmd.RegisterFlagCompletionFunc("region", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var matches []string
+		for _, r := range flags.CommonRegions {
+			if strings.HasPrefix(r, toComplete) {
+				matches = append(matches, r)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

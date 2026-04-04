@@ -3,9 +3,11 @@ package dataproc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +43,7 @@ func requireRegion(cmd *cobra.Command, cfg *config.Config) (string, error) {
 		region = cfg.Region()
 	}
 	if region == "" {
-		return "", fmt.Errorf("no region set (use --region or 'gcgo config set region REGION')")
+		return "", fmt.Errorf("no region set — use --region REGION, run 'gcgo config set region REGION' to persist, or 'gcgo compute regions list' to see available regions")
 	}
 	return region, nil
 }
@@ -52,6 +54,18 @@ func makeClient(ctx context.Context, creds *auth.Credentials) (Client, error) {
 		return nil, err
 	}
 	return NewClient(ctx, opt)
+}
+
+func addRegionCompletion(cmd *cobra.Command) {
+	_ = cmd.RegisterFlagCompletionFunc("region", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var matches []string
+		for _, r := range flags.CommonRegions {
+			if strings.HasPrefix(r, toComplete) {
+				matches = append(matches, r)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 func newClustersCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
@@ -110,6 +124,7 @@ func newClustersListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -143,6 +158,7 @@ func newClustersDescribeCommand(cfg *config.Config, creds *auth.Credentials) *co
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -178,6 +194,7 @@ func newClustersCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.MachineType, "machine-type", "n1-standard-4", "Machine type for nodes")
 	cmd.Flags().Int64Var(&req.NumWorkers, "num-workers", 2, "Number of worker nodes")
 	cmd.Flags().StringVar(&req.ImageVersion, "image-version", "", "Dataproc image version")
@@ -214,6 +231,7 @@ func newClustersDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -247,6 +265,7 @@ func newClustersStartCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -280,6 +299,7 @@ func newClustersStopCommand(cfg *config.Config, creds *auth.Credentials) *cobra.
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -337,6 +357,7 @@ func newJobsListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Comm
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -370,6 +391,7 @@ func newJobsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra.
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -410,6 +432,7 @@ func newJobsSubmitCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Co
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.ClusterName, "cluster", "", "Cluster name")
 	cmd.Flags().StringVar(&req.MainClass, "class", "", "Main class")
 	cmd.Flags().StringSliceVar(&req.JarFileURIs, "jars", nil, "Jar file URIs")
@@ -447,6 +470,7 @@ func newJobsCancelCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Co
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -504,6 +528,7 @@ func newBatchesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -537,6 +562,7 @@ func newBatchesDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cob
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }
 
@@ -576,6 +602,7 @@ func newBatchesCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	cmd.Flags().StringVar(&req.BatchID, "batch-id", "", "Batch ID")
 	cmd.Flags().StringVar(&req.MainClass, "class", "", "Main class")
 	cmd.Flags().StringSliceVar(&req.JarFileURIs, "jars", nil, "Jar file URIs")
@@ -613,5 +640,6 @@ func newBatchesDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "Region")
+	addRegionCompletion(cmd)
 	return cmd
 }

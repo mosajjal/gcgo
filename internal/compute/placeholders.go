@@ -9,6 +9,7 @@ import (
 
 	"github.com/mosajjal/gcgo/internal/auth"
 	"github.com/mosajjal/gcgo/internal/config"
+	"github.com/mosajjal/gcgo/internal/flags"
 	"github.com/mosajjal/gcgo/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -203,7 +204,7 @@ func newVPNTunnelsListCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -233,7 +234,7 @@ func newVPNTunnelsDescribeCommand(cfg *config.Config, creds *auth.Credentials) *
 			return output.PrintJSON(cmd.OutOrStdout(), t)
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
 
@@ -272,7 +273,7 @@ func newVPNTunnelsCreateCommand(cfg *config.Config, creds *auth.Credentials) *co
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	cmd.Flags().StringVar(&req.PeerIP, "peer-ip", "", "Peer VPN gateway IP address")
 	cmd.Flags().StringVar(&req.SharedSecret, "shared-secret", "", "Shared secret for the tunnel")
 	cmd.Flags().StringVar(&req.VPNGateway, "vpn-gateway", "", "VPN gateway self-link")
@@ -307,6 +308,6 @@ func newVPNTunnelsDeleteCommand(cfg *config.Config, creds *auth.Credentials) *co
 			return nil
 		},
 	}
-	cmd.Flags().String("region", "", "Region (falls back to config)")
+	flags.AddRegionFlag(cmd)
 	return cmd
 }
