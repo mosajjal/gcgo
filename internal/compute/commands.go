@@ -45,6 +45,9 @@ func NewCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		newVPNTunnelsCommand(cfg, creds),
 		newSSLCertificatesCommand(cfg, creds),
 		newSecurityPoliciesCommand(cfg, creds),
+		newZonesCommand(cfg, creds),
+		newRegionsCommand(cfg, creds),
+		newMachineTypesCommand(cfg, creds),
 		newSSHCommand(cfg, creds),
 		newSCPCommand(cfg, creds),
 	)

@@ -176,6 +176,9 @@ type Client interface {
 	DeleteSecurityPolicy(ctx context.Context, project, name string) error
 	AddSecurityPolicyRule(ctx context.Context, project, policy string, rule *SecurityPolicyRuleRequest) error
 	RemoveSecurityPolicyRule(ctx context.Context, project, policy string, priority int32) error
+	ListZones(ctx context.Context, project, region string) ([]*Zone, error)
+	ListRegions(ctx context.Context, project string) ([]*Region, error)
+	ListMachineTypes(ctx context.Context, project, zone string) ([]*MachineType, error)
 }
 
 // CreateInstanceRequest holds parameters for instance creation.
@@ -270,6 +273,29 @@ type CreateUnmanagedInstanceGroupRequest struct {
 	Description string
 }
 
+// Zone holds compute zone fields.
+type Zone struct {
+	Name   string `json:"name"`
+	Region string `json:"region"`
+	Status string `json:"status"`
+}
+
+// Region holds compute region fields.
+type Region struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Zones  []string `json:"zones,omitempty"`
+}
+
+// MachineType holds machine type fields.
+type MachineType struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	VCPUs       int32  `json:"vcpus"`
+	MemoryMb    int32  `json:"memory_mb"`
+	Zone        string `json:"zone"`
+}
+
 // SSLCertificate holds SSL certificate fields.
 type SSLCertificate struct {
 	Name        string   `json:"name"`
@@ -333,6 +359,9 @@ type gcpClient struct {
 	unmanagedInstanceGroups *compute.InstanceGroupsClient
 	sslCertificates         *compute.SslCertificatesClient
 	securityPolicies        *compute.SecurityPoliciesClient
+	zones                   *compute.ZonesClient
+	regions                 *compute.RegionsClient
+	machineTypes            *compute.MachineTypesClient
 }
 
 // NewClient creates a Client backed by the real GCP Compute API.
@@ -386,6 +415,18 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 	if err != nil {
 		return nil, fmt.Errorf("create security policies client: %w", err)
 	}
+	zc, err := compute.NewZonesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create zones client: %w", err)
+	}
+	rc, err := compute.NewRegionsRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create regions client: %w", err)
+	}
+	mtc, err := compute.NewMachineTypesRESTClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create machine types client: %w", err)
+	}
 
 	return &gcpClient{
 		instances:               ic,
@@ -400,6 +441,9 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (Client, error)
 		unmanagedInstanceGroups: uigc,
 		sslCertificates:         sslc,
 		securityPolicies:        spc,
+		zones:                   zc,
+		regions:                 rc,
+		machineTypes:            mtc,
 	}, nil
 }
 

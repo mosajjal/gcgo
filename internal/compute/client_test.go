@@ -317,6 +317,18 @@ func (m *mockClient) RemoveSecurityPolicyRule(_ context.Context, _, _ string, _ 
 	return nil
 }
 
+func (m *mockClient) ListZones(_ context.Context, _, _ string) ([]*Zone, error) {
+	return nil, nil
+}
+
+func (m *mockClient) ListRegions(_ context.Context, _ string) ([]*Region, error) {
+	return nil, nil
+}
+
+func (m *mockClient) ListMachineTypes(_ context.Context, _, _ string) ([]*MachineType, error) {
+	return nil, nil
+}
+
 func TestMockListInstances(t *testing.T) {
 	mock := &mockClient{
 		instances: []*Instance{
