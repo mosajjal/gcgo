@@ -3,11 +3,9 @@ module github.com/mosajjal/gcgo
 go 1.26.1
 
 require (
-	cloud.google.com/go/aiplatform v1.120.0
 	cloud.google.com/go/auth v0.18.2
 	cloud.google.com/go/compute v1.54.0
 	cloud.google.com/go/container v1.46.0
-	cloud.google.com/go/dataproc/v2 v2.16.0
 	cloud.google.com/go/iam v1.6.0
 	cloud.google.com/go/logging v1.13.2
 	cloud.google.com/go/monitoring v1.24.3
@@ -21,6 +19,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.20.0
 	google.golang.org/api v0.274.0
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -69,5 +68,4 @@ require (
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401001100-f93e5f3e9f0f // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260319201613-d00831a3d3e7 // indirect
-	google.golang.org/grpc v1.79.3 // indirect
 )
