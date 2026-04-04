@@ -110,7 +110,7 @@ func newDisksListCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Com
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -141,7 +141,7 @@ func newDisksDescribeCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -175,7 +175,7 @@ func newDisksCreateCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().Int64Var(&req.SizeGb, "size", 10, "Disk size in GB")
 	cmd.Flags().StringVar(&req.Type, "type", "pd-balanced", "Disk type")
 	cmd.Flags().StringVar(&req.ImageFamily, "image-family", "", "Optional source image family")
@@ -210,7 +210,7 @@ func newDisksDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cobra.C
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -319,7 +319,7 @@ func newSnapshotsCreateCommand(cfg *config.Config, creds *auth.Credentials) *cob
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&req.SourceDisk, "source-disk", "", "Source persistent disk")
 	cmd.Flags().StringVar(&req.Description, "description", "", "Snapshot description")
 	return cmd
@@ -406,7 +406,7 @@ func newInstancesAddTagsCommand(cfg *config.Config, creds *auth.Credentials) *co
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringSliceVar(&tags, "tags", nil, "Tags to add")
 	return cmd
 }
@@ -444,7 +444,7 @@ func newInstancesRemoveTagsCommand(cfg *config.Config, creds *auth.Credentials) 
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringSliceVar(&tags, "tags", nil, "Tags to remove")
 	return cmd
 }
@@ -480,7 +480,7 @@ func newInstancesSetMachineTypeCommand(cfg *config.Config, creds *auth.Credentia
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&machineType, "machine-type", "", "New machine type (e.g. n1-standard-2)")
 	return cmd
 }
@@ -518,7 +518,7 @@ func newInstancesAttachDiskCommand(cfg *config.Config, creds *auth.Credentials) 
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&disk, "disk", "", "Name of the disk to attach")
 	cmd.Flags().StringVar(&mode, "mode", "rw", "Disk mode: ro (read-only) or rw (read-write)")
 	return cmd
@@ -555,7 +555,7 @@ func newInstancesDetachDiskCommand(cfg *config.Config, creds *auth.Credentials) 
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&deviceName, "device-name", "", "Device name of the disk to detach")
 	return cmd
 }
@@ -613,7 +613,7 @@ func requireZone(cmd *cobra.Command, cfg *config.Config) (string, error) {
 		zone = cfg.Zone()
 	}
 	if zone == "" {
-		return "", fmt.Errorf("no zone set (use --zone or 'gcgo config set zone ZONE')")
+		return "", fmt.Errorf("no zone set — use --zone ZONE, run 'gcgo config set zone ZONE' to persist, or 'gcgo compute zones list' to see available zones")
 	}
 	return zone, nil
 }
@@ -665,7 +665,7 @@ func newInstancesListCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 
 	return cmd
 }
@@ -700,7 +700,7 @@ func newInstancesDescribeCommand(cfg *config.Config, creds *auth.Credentials) *c
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 
 	return cmd
 }
@@ -739,7 +739,7 @@ func newInstancesCreateCommand(cfg *config.Config, creds *auth.Credentials) *cob
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&req.MachineType, "machine-type", "e2-medium", "Machine type")
 	cmd.Flags().StringVar(&req.ImageFamily, "image-family", "debian-12", "Image family")
 	cmd.Flags().StringVar(&req.ImageProject, "image-project", "debian-cloud", "Image project")
@@ -792,7 +792,7 @@ func newInstancesDeleteCommand(cfg *config.Config, creds *auth.Credentials) *cob
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 
 	return cmd
 }
@@ -804,7 +804,7 @@ func newInstancesStartCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 		Args:  cobra.ExactArgs(1),
 		RunE:  instanceLifecycleRunner(cfg, creds, "start"),
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -815,7 +815,7 @@ func newInstancesStopCommand(cfg *config.Config, creds *auth.Credentials) *cobra
 		Args:  cobra.ExactArgs(1),
 		RunE:  instanceLifecycleRunner(cfg, creds, "stop"),
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -826,7 +826,7 @@ func newInstancesResetCommand(cfg *config.Config, creds *auth.Credentials) *cobr
 		Args:  cobra.ExactArgs(1),
 		RunE:  instanceLifecycleRunner(cfg, creds, "reset"),
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -1019,7 +1019,7 @@ func newSSHCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&user, "user", "", "SSH username")
 
 	return cmd
@@ -1071,7 +1071,7 @@ func newSCPCommand(cfg *config.Config, creds *auth.Credentials) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&user, "user", "", "SSH username")
 
 	return cmd

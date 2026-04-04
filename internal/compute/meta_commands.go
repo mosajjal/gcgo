@@ -154,7 +154,7 @@ func newMachineTypesListCommand(cfg *config.Config, creds *auth.Credentials) *co
 		},
 	}
 	cmd.Flags().String("project", "", "GCP project ID")
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().String("format", "table", "Output format: table, json")
 	return cmd
 }

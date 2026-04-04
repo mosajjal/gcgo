@@ -199,7 +199,7 @@ func newUnmanagedInstanceGroupsListCommand(cfg *config.Config, creds *auth.Crede
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -229,7 +229,7 @@ func newUnmanagedInstanceGroupsDescribeCommand(cfg *config.Config, creds *auth.C
 			return output.PrintJSON(cmd.OutOrStdout(), g)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -262,7 +262,7 @@ func newUnmanagedInstanceGroupsCreateCommand(cfg *config.Config, creds *auth.Cre
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&req.Network, "network", "", "VPC network")
 	cmd.Flags().StringVar(&req.Description, "description", "", "Group description")
 	return cmd
@@ -294,7 +294,7 @@ func newUnmanagedInstanceGroupsDeleteCommand(cfg *config.Config, creds *auth.Cre
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -346,7 +346,7 @@ func newManagedInstanceGroupsListCommand(cfg *config.Config, creds *auth.Credent
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -376,7 +376,7 @@ func newManagedInstanceGroupsDescribeCommand(cfg *config.Config, creds *auth.Cre
 			return output.PrintJSON(cmd.OutOrStdout(), mig)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -412,7 +412,7 @@ func newManagedInstanceGroupsCreateCommand(cfg *config.Config, creds *auth.Crede
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&req.Template, "template", "", "Instance template")
 	cmd.Flags().Int32Var(&req.TargetSize, "size", 1, "Target size")
 	cmd.Flags().StringVar(&req.BaseInstanceName, "base-instance-name", "", "Base instance name")
@@ -446,7 +446,7 @@ func newManagedInstanceGroupsDeleteCommand(cfg *config.Config, creds *auth.Crede
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -498,7 +498,7 @@ func newAutoscalersListCommand(cfg *config.Config, creds *auth.Credentials) *cob
 			return output.PrintTable(cmd.OutOrStdout(), headers, rows)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -528,7 +528,7 @@ func newAutoscalersDescribeCommand(cfg *config.Config, creds *auth.Credentials) 
 			return output.PrintJSON(cmd.OutOrStdout(), as)
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
 
@@ -564,7 +564,7 @@ func newAutoscalersCreateCommand(cfg *config.Config, creds *auth.Credentials) *c
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	cmd.Flags().StringVar(&req.Target, "target", "", "Target managed instance group")
 	cmd.Flags().Int32Var(&req.MinReplicas, "min-replicas", 1, "Minimum replicas")
 	cmd.Flags().Int32Var(&req.MaxReplicas, "max-replicas", 3, "Maximum replicas")
@@ -599,6 +599,6 @@ func newAutoscalersDeleteCommand(cfg *config.Config, creds *auth.Credentials) *c
 			return nil
 		},
 	}
-	cmd.Flags().String("zone", "", "Zone (falls back to config)")
+	addZoneFlag(cmd)
 	return cmd
 }
