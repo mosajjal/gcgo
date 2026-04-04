@@ -79,9 +79,10 @@ var commonZones = []string{
 	"africa-south1-a", "africa-south1-b", "africa-south1-c",
 }
 
-// addZoneFlag adds --zone to cmd and registers fish/bash/zsh completion backed
-// by the hardcoded commonZones list.
-func addZoneFlag(cmd *cobra.Command) {
+// AddZoneFlag adds --zone to cmd and registers fish/bash/zsh completion backed
+// by the hardcoded commonZones list. Exported so top-level alias commands can
+// reuse it without duplicating the zone list.
+func AddZoneFlag(cmd *cobra.Command) {
 	cmd.Flags().String("zone", "", "Zone (falls back to config)")
 	_ = cmd.RegisterFlagCompletionFunc("zone", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var matches []string
