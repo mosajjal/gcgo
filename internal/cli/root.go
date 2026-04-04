@@ -84,6 +84,8 @@ func NewRootCommand() *cobra.Command {
 		return nil
 	}
 
+	root.AddCommand(newWhoamiCommand(cfg, creds))
+	root.AddCommand(newUseCommand(cfg))
 	root.AddCommand(config.NewCommand(cfg))
 	root.AddCommand(auth.NewCommand(creds))
 	root.AddCommand(projects.NewCommand(creds))
