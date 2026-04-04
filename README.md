@@ -55,6 +55,63 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
 gcgo auth list
 ```
 
+## CI / GitHub Actions
+
+gcgo works with [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) — no service account key file needed. The `google-github-actions/auth` action writes an ADC-compatible external credential config and sets `GOOGLE_APPLICATION_CREDENTIALS`; gcgo picks it up automatically on the next call.
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for OIDC token request
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install gcgo
+        run: go install github.com/mosajjal/gcgo/cmd/gcgo@latest
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER
+          service_account: deployer@PROJECT_ID.iam.gserviceaccount.com
+
+      - name: Deploy
+        run: |
+          gcgo run deploy my-service \
+            --image gcr.io/$PROJECT_ID/my-image:${{ github.sha }} \
+            --region us-central1
+```
+
+For Docker pushes in the same job:
+
+```yaml
+      - name: Authenticate Docker and push
+        run: |
+          gcgo auth configure-docker
+          docker build -t gcr.io/$PROJECT_ID/my-image:${{ github.sha }} .
+          docker push gcr.io/$PROJECT_ID/my-image:${{ github.sha }}
+```
+
+For Terraform:
+
+```yaml
+      - name: Terraform apply
+        run: GOOGLE_OAUTH_ACCESS_TOKEN=$(gcgo token) terraform apply -auto-approve
+```
+
+`GCGO_CONFIG_DIR` is useful when you want to isolate credentials from the default `~/.config/gcgo/` path:
+
+```yaml
+      - run: GCGO_CONFIG_DIR=/tmp/gcgo-ci gcgo run services list --region us-central1
+```
+
 ## Config
 
 ```sh
