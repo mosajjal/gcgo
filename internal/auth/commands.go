@@ -1,10 +1,9 @@
 package auth
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -199,112 +198,62 @@ func newADCPrintAccessTokenCommand(creds *Credentials) *cobra.Command {
 	}
 }
 
-func newConfigureDockerCommand(_ *Credentials) *cobra.Command {
-	return &cobra.Command{
+// gcpDockerRegistries is the list of GCR and Artifact Registry hostnames
+// that gcgo authenticates Docker against.
+var gcpDockerRegistries = []string{
+	"gcr.io",
+	"us.gcr.io",
+	"eu.gcr.io",
+	"asia.gcr.io",
+	"us-docker.pkg.dev",
+	"europe-docker.pkg.dev",
+	"asia-docker.pkg.dev",
+}
+
+func newConfigureDockerCommand(creds *Credentials) *cobra.Command {
+	var registries []string
+
+	cmd := &cobra.Command{
 		Use:   "configure-docker",
-		Short: "Configure Docker to authenticate to GCP registries",
+		Short: "Authenticate Docker to GCP registries using current credentials",
+		Long: "Runs 'docker login' for GCP registries using the current access token.\n" +
+			"Equivalent to: gcgo token | docker login -u oauth2accesstoken --password-stdin REGISTRY\n" +
+			"Token is valid for ~1 hour. Re-run before it expires or wrap in a script.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			home, err := os.UserHomeDir()
+			ctx := cmd.Context()
+			token, err := creds.AccessToken(ctx, "", nil)
 			if err != nil {
-				return fmt.Errorf("resolve home dir: %w", err)
+				return fmt.Errorf("get access token: %w", err)
 			}
 
-			dockerConfigPath := filepath.Join(home, ".docker", "config.json")
-
-			// Read existing config or start fresh
-			var dockerCfg map[string]json.RawMessage
-			data, err := os.ReadFile(dockerConfigPath) //nolint:gosec // path is from well-known location
-			if err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("read docker config: %w", err)
+			targets := registries
+			if len(targets) == 0 {
+				targets = gcpDockerRegistries
 			}
-			if len(data) > 0 {
-				if err := json.Unmarshal(data, &dockerCfg); err != nil {
-					return fmt.Errorf("parse docker config: %w", err)
+
+			var failed []string
+			for _, registry := range targets {
+				dockerCmd := exec.CommandContext(ctx, "docker", "login",
+					"-u", "oauth2accesstoken",
+					"--password-stdin",
+					registry,
+				) //nolint:gosec // registry is from a fixed list or explicit --registries flag
+				dockerCmd.Stdin = strings.NewReader(token)
+				dockerCmd.Stdout = cmd.OutOrStdout()
+				dockerCmd.Stderr = cmd.ErrOrStderr()
+				if err := dockerCmd.Run(); err != nil {
+					failed = append(failed, registry)
 				}
 			}
-			if dockerCfg == nil {
-				dockerCfg = make(map[string]json.RawMessage)
-			}
 
-			// Merge credHelpers
-			var credHelpers map[string]string
-			if raw, ok := dockerCfg["credHelpers"]; ok {
-				if err := json.Unmarshal(raw, &credHelpers); err != nil {
-					return fmt.Errorf("parse credHelpers: %w", err)
-				}
-			}
-			if credHelpers == nil {
-				credHelpers = make(map[string]string)
-			}
-
-			for _, r := range dockerRegistries {
-				credHelpers[r] = "gcgo"
-			}
-
-			raw, err := json.Marshal(credHelpers)
-			if err != nil {
-				return fmt.Errorf("marshal credHelpers: %w", err)
-			}
-			dockerCfg["credHelpers"] = json.RawMessage(raw)
-
-			out, err := json.MarshalIndent(dockerCfg, "", "  ")
-			if err != nil {
-				return fmt.Errorf("marshal docker config: %w", err)
-			}
-
-			if err := os.MkdirAll(filepath.Dir(dockerConfigPath), 0o700); err != nil {
-				return fmt.Errorf("create docker config dir: %w", err)
-			}
-			if err := os.WriteFile(dockerConfigPath, out, 0o600); err != nil {
-				return fmt.Errorf("write docker config: %w", err)
-			}
-
-			// Create docker-credential-gcgo symlink next to the gcgo binary so
-			// Docker can invoke the credential helper by its expected name.
-			symlinkErr := createDockerCredentialSymlink()
-			if symlinkErr != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-					"warning: could not create docker-credential-gcgo symlink: %v\n"+
-						"  Create it manually: ln -s $(which gcgo) $(dirname $(which gcgo))/docker-credential-gcgo\n",
-					symlinkErr)
-			}
-
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-				"Docker configured to use gcgo as credential helper for: %s\n",
-				"gcr.io, us.gcr.io, eu.gcr.io, asia.gcr.io, us-docker.pkg.dev, europe-docker.pkg.dev, asia-docker.pkg.dev",
-			)
-			if symlinkErr == nil {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Symlink docker-credential-gcgo created. Docker authentication is ready.")
+			if len(failed) > 0 {
+				return fmt.Errorf("docker login failed for: %s", strings.Join(failed, ", "))
 			}
 			return nil
 		},
 	}
-}
 
-// createDockerCredentialSymlink creates a docker-credential-gcgo symlink next
-// to the running gcgo binary so Docker can call it as a credential helper.
-func createDockerCredentialSymlink() error {
-	self, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("resolve executable path: %w", err)
-	}
-	// Follow symlinks to the real binary so we don't create a symlink chain.
-	self, err = filepath.EvalSymlinks(self)
-	if err != nil {
-		return fmt.Errorf("eval symlinks: %w", err)
-	}
-
-	target := filepath.Join(filepath.Dir(self), "docker-credential-gcgo")
-
-	// Remove stale symlink or file if it already exists.
-	if _, err := os.Lstat(target); err == nil {
-		if err := os.Remove(target); err != nil {
-			return fmt.Errorf("remove existing %s: %w", target, err)
-		}
-	}
-
-	if err := os.Symlink(self, target); err != nil {
-		return fmt.Errorf("create symlink %s -> %s: %w", target, self, err)
-	}
-	return nil
+	cmd.Flags().StringSliceVar(&registries, "registries", nil,
+		"Registries to authenticate (default: all GCR and Artifact Registry hosts)")
+	return cmd
 }

@@ -67,6 +67,27 @@ gcgo auth list
 gcgo auth print-access-token [--scope SCOPE] [--impersonate-service-account EMAIL]
 gcgo auth print-identity-token [--audience URL] [--impersonate-service-account EMAIL] [--include-email]
 gcgo auth revoke
+gcgo auth application-default login
+gcgo auth application-default print-access-token
+gcgo auth configure-docker [--registries gcr.io,us-docker.pkg.dev,...]
+```
+
+`configure-docker` calls `docker login -u oauth2accesstoken --password-stdin` for each GCR/Artifact Registry host using the current access token. No credential helper binary or symlink is needed — tokens are fetched fresh each time. Token lifetime is ~1 hour; re-run before it expires.
+
+CI pattern:
+```
+gcgo auth configure-docker
+docker build -t gcr.io/PROJECT/IMAGE:TAG .
+docker push gcr.io/PROJECT/IMAGE:TAG
+```
+
+Scripting with the token directly:
+```
+gcgo auth print-access-token | docker login -u oauth2accesstoken --password-stdin gcr.io
+# or
+GOOGLE_OAUTH_ACCESS_TOKEN=$(gcgo auth print-access-token) terraform apply
+# or
+TOKEN=$(gcgo token)   # shortcut alias
 ```
 
 ### projects — Project Management

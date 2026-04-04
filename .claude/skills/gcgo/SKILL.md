@@ -32,6 +32,26 @@ gcgo auth login --service-account-key key.json    # service account key
 
 For CI/CD: set `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json` — gcgo picks it up automatically.
 
+### Docker authentication
+
+`gcgo auth configure-docker` calls `docker login` for all GCR and Artifact Registry hosts using the current access token. No credential helper or symlink needed.
+
+```bash
+gcgo auth configure-docker
+docker push gcr.io/my-project/my-image:latest
+```
+
+For finer control or scripting:
+```bash
+# authenticate a single registry
+gcgo token | docker login -u oauth2accesstoken --password-stdin us-docker.pkg.dev
+
+# Terraform with WIF/ADC token
+GOOGLE_OAUTH_ACCESS_TOKEN=$(gcgo token) terraform apply
+```
+
+Token lifetime is ~1 hour. Re-run `gcgo auth configure-docker` if a long build expires it.
+
 ## Key Patterns
 
 ### Always set a project
