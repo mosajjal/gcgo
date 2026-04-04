@@ -212,23 +212,23 @@ func newConfigureDockerCommand(_ *Credentials) *cobra.Command {
 			dockerConfigPath := filepath.Join(home, ".docker", "config.json")
 
 			// Read existing config or start fresh
-			var config map[string]json.RawMessage
+			var dockerCfg map[string]json.RawMessage
 			data, err := os.ReadFile(dockerConfigPath) //nolint:gosec // path is from well-known location
 			if err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("read docker config: %w", err)
 			}
 			if len(data) > 0 {
-				if err := json.Unmarshal(data, &config); err != nil {
+				if err := json.Unmarshal(data, &dockerCfg); err != nil {
 					return fmt.Errorf("parse docker config: %w", err)
 				}
 			}
-			if config == nil {
-				config = make(map[string]json.RawMessage)
+			if dockerCfg == nil {
+				dockerCfg = make(map[string]json.RawMessage)
 			}
 
 			// Merge credHelpers
 			var credHelpers map[string]string
-			if raw, ok := config["credHelpers"]; ok {
+			if raw, ok := dockerCfg["credHelpers"]; ok {
 				if err := json.Unmarshal(raw, &credHelpers); err != nil {
 					return fmt.Errorf("parse credHelpers: %w", err)
 				}
@@ -237,16 +237,7 @@ func newConfigureDockerCommand(_ *Credentials) *cobra.Command {
 				credHelpers = make(map[string]string)
 			}
 
-			registries := []string{
-				"gcr.io",
-				"us.gcr.io",
-				"eu.gcr.io",
-				"asia.gcr.io",
-				"us-docker.pkg.dev",
-				"europe-docker.pkg.dev",
-				"asia-docker.pkg.dev",
-			}
-			for _, r := range registries {
+			for _, r := range dockerRegistries {
 				credHelpers[r] = "gcgo"
 			}
 
@@ -254,9 +245,9 @@ func newConfigureDockerCommand(_ *Credentials) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("marshal credHelpers: %w", err)
 			}
-			config["credHelpers"] = json.RawMessage(raw)
+			dockerCfg["credHelpers"] = json.RawMessage(raw)
 
-			out, err := json.MarshalIndent(config, "", "  ")
+			out, err := json.MarshalIndent(dockerCfg, "", "  ")
 			if err != nil {
 				return fmt.Errorf("marshal docker config: %w", err)
 			}
@@ -268,12 +259,52 @@ func newConfigureDockerCommand(_ *Credentials) *cobra.Command {
 				return fmt.Errorf("write docker config: %w", err)
 			}
 
+			// Create docker-credential-gcgo symlink next to the gcgo binary so
+			// Docker can invoke the credential helper by its expected name.
+			symlinkErr := createDockerCredentialSymlink()
+			if symlinkErr != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+					"warning: could not create docker-credential-gcgo symlink: %v\n"+
+						"  Create it manually: ln -s $(which gcgo) $(dirname $(which gcgo))/docker-credential-gcgo\n",
+					symlinkErr)
+			}
+
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-				"Docker has been configured to use gcgo as credential helper for: %s\n",
+				"Docker configured to use gcgo as credential helper for: %s\n",
 				"gcr.io, us.gcr.io, eu.gcr.io, asia.gcr.io, us-docker.pkg.dev, europe-docker.pkg.dev, asia-docker.pkg.dev",
 			)
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Note: gcgo must be in your PATH for Docker to use it as a credential helper.")
+			if symlinkErr == nil {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Symlink docker-credential-gcgo created. Docker authentication is ready.")
+			}
 			return nil
 		},
 	}
+}
+
+// createDockerCredentialSymlink creates a docker-credential-gcgo symlink next
+// to the running gcgo binary so Docker can call it as a credential helper.
+func createDockerCredentialSymlink() error {
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve executable path: %w", err)
+	}
+	// Follow symlinks to the real binary so we don't create a symlink chain.
+	self, err = filepath.EvalSymlinks(self)
+	if err != nil {
+		return fmt.Errorf("eval symlinks: %w", err)
+	}
+
+	target := filepath.Join(filepath.Dir(self), "docker-credential-gcgo")
+
+	// Remove stale symlink or file if it already exists.
+	if _, err := os.Lstat(target); err == nil {
+		if err := os.Remove(target); err != nil {
+			return fmt.Errorf("remove existing %s: %w", target, err)
+		}
+	}
+
+	if err := os.Symlink(self, target); err != nil {
+		return fmt.Errorf("create symlink %s -> %s: %w", target, self, err)
+	}
+	return nil
 }
